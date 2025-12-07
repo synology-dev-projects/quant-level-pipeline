@@ -1,0 +1,79 @@
+name: Staging to Production Pipeline
+
+# TRIGGER: Only run when pushing to 'develop'
+on:
+  push:
+    branches: [ "develop" ]
+
+# PERMISSIONS: Required to allow the Action to push changes to 'main'
+permissions:
+  contents: write
+
+jobs:
+  deploy-and-promote:
+    runs-on: self-hosted
+
+    steps:
+      # 1. Checkout the 'develop' branch
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch all history so we can merge
+
+      # 2. Load Environment Variables
+      - name: Load Synology Paths
+        run: |
+          cat ../conf/syno_paths.env >> $GITHUB_ENV
+
+      # 3. Install Dependencies
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      # 4. DEPLOY TO STAGING AREA
+      - name: Deploy to Staging Folder
+        run: |
+          # Define Staging Path (e.g. .../projects/MyProject_STAGING)
+          STAGING_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${{ github.event.repository.name }}/staging"
+          echo "Deploying to Staging: $STAGING_PATH"
+          
+          mkdir -p "$STAGING_PATH"
+          cp -ru src/ "$STAGING_PATH/"
+          
+          # Save this path for the test step
+          echo "TEST_DIR=$STAGING_PATH" >> $GITHUB_ENV
+
+      # 5. RUN TESTS (In Staging Context)
+      - name: Run Verification in Staging
+        run: |
+          echo "Running tests against Staging..."
+          chmod +x verify.sh
+          # We run the script. If it fails, the workflow STOPS here.
+          ./verify.sh
+
+      # --- GATEKEEPER: If we reach this line, tests have PASSED ---
+
+      # 6. AUTO-MERGE TO MAIN
+      - name: Merge Develop into Main
+        run: |
+          echo "Tests passed. Promoting to Main..."
+          
+          # Configure Git for the Runner
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          # Switch to main, merge develop, and push
+          git checkout main
+          git pull origin main
+          git merge develop
+          git push origin main
+
+      # 7. DEPLOY TO PRODUCTION
+      - name: Deploy to Production Folder
+        run: |
+          PROD_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${{ github.event.repository.name }}/prod"
+          echo "Deploying to Production: $PROD_PATH"
+          
+          mkdir -p "$PROD_PATH"
+          cp -ru src/ "$PROD_PATH/"
+          
+          echo "SUCCESS: Code verified, merged to Main, and deployed to Prod."
