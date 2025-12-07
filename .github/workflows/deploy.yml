@@ -3,7 +3,7 @@ name: Staging to Production Pipeline
 # TRIGGER: Only run when pushing to 'develop'
 on:
   push:
-    branches: [ "develop" ]
+    branches: [ "Develop" ]
 
 # PERMISSIONS: Required to allow the Action to push changes to 'main'
 permissions:
