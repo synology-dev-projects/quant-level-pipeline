@@ -20,6 +20,17 @@ jobs:
         with:
           fetch-depth: 0 # Fetch all history so we can merge
 
+      - name: Debug Directory Structure
+        run: |
+          echo "📍 Current working directory:"
+          pwd
+          
+          echo "📂 Listing contents of current folder:"
+          ls -la
+          
+          echo "⬆️ Listing contents of 2 directories up (../../):"
+          ls -R ../../
+
       # 2. Load Environment Variables
       - name: Load Synology Paths
         run: |
