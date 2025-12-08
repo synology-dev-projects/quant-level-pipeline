@@ -67,20 +67,20 @@ jobs:
 
       # --- PROMOTION PHASE ---
 
-      - name: Safe Merge to Main
+      - name: Safe Merge to master
         run: |
           echo "Tests passed. Promoting..."
           
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
-          git checkout main
-          git pull origin main
+          git checkout master
+          git pull origin master
           
           if git merge develop --no-commit; then
               echo "Merge successful. Committing..."
-              git commit -m "Auto-merge develop to main [Skip CI]"
-              git push origin main
+              git commit -m "Auto-merge develop to master [Skip CI]"
+              git push origin master
           else
               echo "::error::MERGE CONFLICT. Aborting."
               git merge --abort
