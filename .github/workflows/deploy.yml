@@ -1,0 +1,100 @@
+name: Staging to Production Pipeline
+
+# 1. TRIGGER
+on:
+  push:
+    branches: [ "develop" ]
+  # Allows you to click "Run workflow" manually in the Actions tab for testing
+  workflow_dispatch:
+
+# 2. PERMISSIONS
+permissions:
+  contents: write
+
+jobs:
+  deploy-and-promote:
+    runs-on: self-hosted
+
+    steps:
+      # --- SETUP PHASE ---
+
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Required for merging
+
+      - name: Debug Directory (Optional)
+        run: |
+          echo "📍 Current location:"
+          pwd
+          echo "🔎 Looking for conf..."
+          ls -R ../../
+
+      - name: Load Synology Paths
+        run: |
+          echo "Loading configuration..."
+          
+          # UPDATED PATH: We go up 3 levels now 
+          # (_work/Repo/Repo -> _work/Repo -> _work -> Root -> conf)
+          cat ../../conf/syno_paths.env >> $GITHUB_ENV
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # --- STAGING PHASE ---
+
+      - name: Deploy to Staging Folder
+        run: |
+          STAGING_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${{ github.event.repository.name }}/staging"
+          echo "Deploying to Staging: $STAGING_PATH"
+          
+          mkdir -p "$STAGING_PATH"
+          cp -ru src/ "$STAGING_PATH/"
+          cp -ru tests/ "$STAGING_PATH/"
+          
+          cp verify.sh "$STAGING_PATH/"
+          
+          echo "STAGING_DIR=$STAGING_PATH" >> $GITHUB_ENV
+
+      - name: Run Verification in Staging
+        run: |
+          echo "Running tests in Staging..."
+          cd "${{ env.STAGING_DIR }}"
+          chmod +x verify.sh
+          ./verify.sh
+
+      # --- PROMOTION PHASE ---
+
+      - name: Safe Merge to Master
+        run: |
+          echo "Tests passed. Promoting..."
+          
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          echo "Fetching latest develop..."
+          git fetch origin develop
+          
+          git checkout master
+          git pull origin master
+          
+          # FIX: Use --no-ff to FORCE a merge commit.
+          # We also add the message (-m) right here in one command.
+          git merge origin/develop --no-ff -m "Auto-merge develop to master [Skip CI]"
+          
+          echo "Pushing to master..."
+          git push origin master
+
+      # --- PRODUCTION PHASE ---
+
+      - name: Deploy to Production Folder
+        run: |
+          PROD_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${{ github.event.repository.name }}/prod"
+          echo "Deploying to Production: $PROD_PATH"
+          
+          mkdir -p "$PROD_PATH"
+          cp -ru src/ "$PROD_PATH/"
+          
+          echo "SUCCESS: Deployed to Production."
