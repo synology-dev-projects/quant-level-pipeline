@@ -52,6 +52,8 @@ jobs:
           
           mkdir -p "$STAGING_PATH"
           cp -ru src/ "$STAGING_PATH/"
+          cp -ru tests/ "$STAGING_PATH/"
+          
           cp verify.sh "$STAGING_PATH/"
           
           echo "STAGING_DIR=$STAGING_PATH" >> $GITHUB_ENV
