@@ -67,17 +67,20 @@ jobs:
 
       # --- PROMOTION PHASE ---
 
-      - name: Safe Merge to master
+      - name: Safe Merge to Master
         run: |
           echo "Tests passed. Promoting..."
           
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
+          # 1. Switch to master
           git checkout master
           git pull origin master
           
-          if git merge develop --no-commit; then
+          # 2. Merge the REMOTE develop branch (origin/develop)
+          # We use origin/develop because the local 'develop' branch doesn't exist on the runner
+          if git merge origin/develop --no-commit; then
               echo "Merge successful. Committing..."
               git commit -m "Auto-merge develop to master [Skip CI]"
               git push origin master
