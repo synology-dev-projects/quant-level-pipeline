@@ -1,8 +1,9 @@
+import logging
 import pytest
 
 
 def test_sample():
     # 1. Run the code that prints
-    print("Hello, Vancouver!")
-
+    logging.info("Hello, Vancouver!")
+    logging.error("Sample test failed")
     assert True
