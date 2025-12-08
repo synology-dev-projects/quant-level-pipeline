@@ -74,21 +74,18 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
-          # 1. Switch to master
+          echo "Fetching latest develop..."
+          git fetch origin develop
+          
           git checkout master
           git pull origin master
           
-          # 2. Merge the REMOTE develop branch (origin/develop)
-          # We use origin/develop because the local 'develop' branch doesn't exist on the runner
-          if git merge origin/develop --no-commit; then
-              echo "Merge successful. Committing..."
-              git commit -m "Auto-merge develop to master [Skip CI]"
-              git push origin master
-          else
-              echo "::error::MERGE CONFLICT. Aborting."
-              git merge --abort
-              exit 1
-          fi
+          # FIX: Use --no-ff to FORCE a merge commit.
+          # We also add the message (-m) right here in one command.
+          git merge origin/develop --no-ff -m "Auto-merge develop to master [Skip CI]"
+          
+          echo "Pushing to master..."
+          git push origin master
 
       # --- PRODUCTION PHASE ---
 
