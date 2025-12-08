@@ -28,7 +28,7 @@ jobs:
           echo "📍 Current location:"
           pwd
           echo "🔎 Looking for conf..."
-          ls -R ../../../
+          ls -R ../../
 
       - name: Load Synology Paths
         run: |
@@ -36,7 +36,7 @@ jobs:
           
           # UPDATED PATH: We go up 3 levels now 
           # (_work/Repo/Repo -> _work/Repo -> _work -> Root -> conf)
-          cat ../../../conf/syno_paths.env >> $GITHUB_ENV
+          cat ../../conf/syno_paths.env >> $GITHUB_ENV
 
       - name: Install Dependencies
         run: |
