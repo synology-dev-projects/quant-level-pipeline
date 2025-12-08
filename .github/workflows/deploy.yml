@@ -1,41 +1,29 @@
-name: Staging to Production Pipeline
+name: Branch-Based Deployment Pipeline
 
-# 1. TRIGGER
+# 1. RUN ON ALL BRANCHES
 on:
   push:
-    branches: [ "develop" ]
-  # Allows you to click "Run workflow" manually in the Actions tab for testing
+    # This wildcard runs the workflow for 'develop', 'master', 'develop2', etc.
+    branches: [ "**" ]
   workflow_dispatch:
 
-# 2. PERMISSIONS
 permissions:
   contents: write
 
 jobs:
-  deploy-and-promote:
+  deploy-branch:
     runs-on: self-hosted
 
     steps:
-      # --- SETUP PHASE ---
-
+      # --- SETUP ---
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # Required for merging
-
-      - name: Debug Directory (Optional)
-        run: |
-          echo "📍 Current location:"
-          pwd
-          echo "🔎 Looking for conf..."
-          ls -R ../../
+          fetch-depth: 0
 
       - name: Load Synology Paths
         run: |
-          echo "Loading configuration..."
-          
-          # UPDATED PATH: We go up 3 levels now 
-          # (_work/Repo/Repo -> _work/Repo -> _work -> Root -> conf)
+          # Internal Runner Path (Unchanged)
           cat ../../conf/syno_paths.env >> $GITHUB_ENV
 
       - name: Install Dependencies
@@ -43,58 +31,53 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      # --- STAGING PHASE ---
-
-      - name: Deploy to Staging Folder
+      # --- DYNAMIC DEPLOYMENT ---
+      - name: Deploy to Branch Folder
         run: |
-          STAGING_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${{ github.event.repository.name }}/staging"
-          echo "Deploying to Staging: $STAGING_PATH"
+          # 1. Get the branch name (e.g., 'develop', 'master', 'develop2')
+          BRANCH_NAME="${{ github.ref_name }}"
+          REPO_NAME="${{ github.event.repository.name }}"
           
-          mkdir -p "$STAGING_PATH"
-          cp -ru src/ "$STAGING_PATH/"
-          cp -ru tests/ "$STAGING_PATH/"
+          # 2. Construct the Dynamic Path
+          # Format: git-repos/{BRANCH}/{REPO}
+          # Example: /volume2/.../git-repos/develop/quant-level-pipeline
+          TARGET_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${BRANCH_NAME}/${REPO_NAME}"
           
-          cp verify.sh "$STAGING_PATH/"
+          echo "📂 Branch detected: $BRANCH_NAME"
+          echo "🚀 Deploying to: $TARGET_PATH"
           
-          echo "STAGING_DIR=$STAGING_PATH" >> $GITHUB_ENV
+          # 3. Create directory and copy
+          mkdir -p "$TARGET_PATH"
+          cp -ru src/ "$TARGET_PATH/"
+          cp -ru tests/ "$TARGET_PATH/"
+          cp verify.sh "$TARGET_PATH/"
+          
+          # 4. Save path for the verification step
+          echo "DEPLOY_DIR=$TARGET_PATH" >> $GITHUB_ENV
 
-      - name: Run Verification in Staging
+      # --- VERIFICATION ---
+      - name: Run Verification
         run: |
-          echo "Running tests in Staging..."
-          cd "${{ env.STAGING_DIR }}"
+          echo "🧪 Testing branch: ${{ github.ref_name }}"
+          cd "${{ env.DEPLOY_DIR }}"
           chmod +x verify.sh
           ./verify.sh
 
-      # --- PROMOTION PHASE ---
-
-      - name: Safe Merge to Master
+      # --- CONDITIONAL MERGE (Only for 'develop') ---
+      # If we are on 'develop' and tests passed, merge to 'master'.
+      # This push to 'master' will trigger this workflow AGAIN to deploy the master folder.
+      - name: Auto-Promote to Master
+        if: github.ref_name == 'develop'
         run: |
-          echo "Tests passed. Promoting..."
+          echo "✅ Develop verified. Promoting to Master..."
           
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
-          echo "Fetching latest develop..."
           git fetch origin develop
-          
           git checkout master
           git pull origin master
           
-          # FIX: Use --no-ff to FORCE a merge commit.
-          # We also add the message (-m) right here in one command.
+          # Merge and Push
           git merge origin/develop --no-ff -m "Auto-merge develop to master [Skip CI]"
-          
-          echo "Pushing to master..."
           git push origin master
-
-      # --- PRODUCTION PHASE ---
-
-      - name: Deploy to Production Folder
-        run: |
-          PROD_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${{ github.event.repository.name }}/prod"
-          echo "Deploying to Production: $PROD_PATH"
-          
-          mkdir -p "$PROD_PATH"
-          cp -ru src/ "$PROD_PATH/"
-          
-          echo "SUCCESS: Deployed to Production."
