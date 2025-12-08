@@ -3,7 +3,7 @@ name: Staging to Production Pipeline
 # 1. TRIGGER
 on:
   push:
-    branches: [ "Develop" ]
+    branches: [ "develop" ]
   # Allows you to click "Run workflow" manually in the Actions tab for testing
   workflow_dispatch:
 
