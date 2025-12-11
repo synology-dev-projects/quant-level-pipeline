@@ -55,6 +55,23 @@ jobs:
           # 4. Save path for the verification step
           echo "DEPLOY_DIR=$TARGET_PATH" >> $GITHUB_ENV
 
+      # --- SECRET INJECTION (The Security Layer) ---
+      - name: Create Runtime .env File
+        run: |
+          # This writes the .env file directly into the deployment folder
+          ENV_FILE="${{ env.DEPLOY_DIR }}/.env"
+          
+          echo "Generating secure .env file at $ENV_FILE..."
+          
+          # Inject secrets from GitHub Vault
+          echo "ORACLE_USER=${{ secrets.ORACLE_USER }}" > "$ENV_FILE"
+          echo "ORACLE_PASSWORD=${{ secrets.ORACLE_PASSWORD }}" >> "$ENV_FILE"
+          echo "ORACLE_HOST_IP=${{ secrets.ORACLE_HOST_IP }}" >> "$ENV_FILE"
+          echo "ORACLE_SERVICE=${{ secrets.ORACLE_SERVICE }}" >> "$ENV_FILE"
+          
+          # Lock it down (Owner Read/Write only)
+          chmod 600 "$ENV_FILE"
+
       # --- VERIFICATION ---
       - name: Run Verification
         run: |
