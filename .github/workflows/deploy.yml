@@ -82,7 +82,7 @@ jobs:
           
           # Inject secrets from GitHub Vault
           echo "ORACLE_USER=${{ secrets.ORACLE_USER }}" > "$ENV_FILE"
-          echo "ORACLE_PASSWORD=${{ secrets.ORACLE_PASS }}" >> "$ENV_FILE"
+          echo "ORACLE_PASS=${{ secrets.ORACLE_PASS }}" >> "$ENV_FILE"
           echo "ORACLE_HOST_IP=${{ secrets.ORACLE_HOST_IP }}" >> "$ENV_FILE"
           echo "ORACLE_SERVICE=${{ secrets.ORACLE_SERVICE }}" >> "$ENV_FILE"
           
