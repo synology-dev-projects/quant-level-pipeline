@@ -6,6 +6,7 @@ import sqlalchemy as sa
 import pandas as pd
 from sqlalchemy.exc import NoSuchTableError
 from src.connectors.config import Config
+import oracledb
 
 class OracleConnector():
     def __init__(self, config:Config):

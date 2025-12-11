@@ -6,8 +6,12 @@
 #
 annotated-types==0.7.0
     # via pydantic
+cffi==1.17.1
+    # via cryptography
 colorama==0.4.6
     # via pytest
+cryptography==46.0.3
+    # via oracledb
 exceptiongroup==1.3.1
     # via pytest
 greenlet==3.1.1
@@ -16,12 +20,16 @@ iniconfig==2.1.0
     # via pytest
 numpy==1.24.4
     # via pandas
+oracledb==3.0.0
+    # via -r requirements.in
 packaging==25.0
     # via pytest
 pandas==2.0.3
     # via -r requirements.in
 pluggy==1.5.0
     # via pytest
+pycparser==2.23
+    # via cffi
 pydantic==2.10.6
     # via
     #   -r requirements.in
@@ -47,6 +55,7 @@ tomli==2.3.0
 typing-extensions==4.13.2
     # via
     #   annotated-types
+    #   cryptography
     #   exceptiongroup
     #   pydantic
     #   pydantic-core
