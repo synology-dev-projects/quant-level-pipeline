@@ -70,7 +70,6 @@ class TestConnector():
         })
 
         temp_table = oracle._df_to_oracle_overwrite(df1, "ticker_test", ["SYMBOL", "DATETIME"])
-        #for some reason _df_to_oracle_overwrite sets all column case to lower case. Must investigate why
         oracle._df_to_oracle_insert_ignore(df2, "ticker_test", ["SYMBOL", "DATETIME"])
 
         returned_df = oracle.sql("SELECT * FROM ticker_test")

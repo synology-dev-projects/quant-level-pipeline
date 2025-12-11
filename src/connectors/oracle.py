@@ -7,9 +7,6 @@ import pandas as pd
 from sqlalchemy.exc import NoSuchTableError
 from src.connectors.config import Config
 
-
-
-
 class OracleConnector():
     def __init__(self, config:Config):
         self.conn = sa.create_engine(f"oracle+oracledb://{config.oracle_user}:{config.oracle_pass.get_secret_value()}@{config.oracle_host_ip}:1521/?service_name={config.oracle_service}")
@@ -37,15 +34,15 @@ class OracleConnector():
         """
 
         start_time = time.time()
-        match write_mode.lower():
-            case 'ignore':
-                self._df_to_oracle_insert_ignore(df, table_name)
-            case 'upsert':
+        write_mode = write_mode.lower()
+        if write_mode == 'ignore':
+            self._df_to_oracle_insert_ignore(df, table_name)
+        elif write_mode == 'upsert':
                 self._df_to_oracle_upsert(df, table_name, primary_keys)
-            case 'overwrite':
-                self._df_to_oracle_overwrite(df, table_name, primary_keys)
-            case _:
-                raise Exception("Invalid write mode")
+        elif write_mode ==  'overwrite':
+            self._df_to_oracle_overwrite(df, table_name, primary_keys)
+        else:
+            raise Exception("Invalid write mode")
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -223,16 +220,16 @@ class OracleConnector():
         on_clause_str = " AND ".join(on_clauses)
 
         # update clause
-        match mode.lower():
-            case "upsert":
-                update_clause_str = f"""
-                    WHEN MATCHED THEN
-                       UPDATE SET {set_clause_str}
-                        """
-            case "ignore":
-                update_clause_str = ""
-            case _:
-                raise Exception("Invalid mode: " + mode)
+        mode = mode.lower()
+        if mode == "upsert":
+            update_clause_str = f"""
+                WHEN MATCHED THEN
+                   UPDATE SET {set_clause_str}
+                    """
+        elif mode == "ignore":
+            update_clause_str = ""
+        else:
+            raise Exception("Invalid mode: " + mode)
 
         merge_sql = f"""
                MERGE INTO {tgt_table_name.upper()} T
