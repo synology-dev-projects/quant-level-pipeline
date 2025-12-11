@@ -28,8 +28,23 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          # 1. Check if .venv exists
+          if [ ! -d ".venv" ]; then
+            echo "Creating virtual environment..."
+            python3.11 -m venv .venv
+          else
+            echo "Virtual environment found."
+          fi
+          
+          # 2. Activate specifically for this step to install requirements
+          source .venv/bin/activate
+          
           pip install --upgrade pip
           pip install -r requirements.txt
+          
+          # 3. CRITICAL: Add venv to GITHUB_PATH
+          # This ensures the 'verify.sh' step later uses this python/pytest automatically
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       # --- DYNAMIC DEPLOYMENT ---
       - name: Deploy to Branch Folder

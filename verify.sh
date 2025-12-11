@@ -17,6 +17,19 @@ cd "$SCRIPT_DIR"
 
 echo "📂 Working Directory: $(pwd)"
 
+# This makes sure we use the isolated environment if it exists.
+if [ -d ".venv" ]; then
+    echo "⚙️  Found .venv... Activating."
+    # We use . (dot) to source, covering both Linux/Mac and some Git Bash setups
+    if [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+    elif [ -f ".venv/Scripts/activate" ]; then
+        source .venv/Scripts/activate
+    fi
+else
+    echo "⚠️  No .venv found. Using system Python:"
+fi
+
 # 3. Safety Check: Do tests exist?
 if [ ! -d "tests" ]; then
     echo "❌ Error: 'tests' directory not found in Staging!"
@@ -24,11 +37,19 @@ if [ ! -d "tests" ]; then
     exit 1
 fi
 
+# Debug: Print which python we are actually using
+echo "🐍 Using Python: $(which python3)"
+
+if [ ! -d "tests" ]; then
+    echo "❌ Error: 'tests' directory not found in Staging!"
+    exit 1
+fi
+
 # 4. Run the Tests
 # Using 'python3 -m pytest' is often safer than just 'pytest'
 # to ensure it uses the correct Python interpreter.
 echo "🚀 Running Pytest..."
-python3 -m pytest -v tests/
+python -m pytest -v tests/
 
 echo "✅ SUCCESS: All tests passed."
 echo "========================================"
