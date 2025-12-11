@@ -1,0 +1,5 @@
+pandas
+pydantic
+pydantic_settings
+pytest
+SQLAlchemy
