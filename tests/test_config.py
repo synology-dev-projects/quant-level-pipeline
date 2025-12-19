@@ -1,11 +1,12 @@
 import src.config as config
+import os
 
 def test_find_project_root(env_config):
     """
     Verifies that the .env file exists and that Pydantic reads it correctly.
     """
-    assert str(env_config.target_env_path).endswith(r"quant-level-pipeline\.env"), \
-        f"Expected path to end with 'quant-level-pipeline\.env' but got: {config.target_env_path}"
+    expected_end = os.path.join("quant-level-pipeline", ".env")
+    assert str(env_config.target_env_path).endswith(expected_end)
 
 
 def test_load_config_from_env(env_config):

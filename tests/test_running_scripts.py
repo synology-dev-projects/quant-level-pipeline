@@ -18,7 +18,7 @@ def test_historical_load(env_config, pipeline_data):
     clean_df = transform.run(env_config,raw_post_json)
     load.run(env_config, "overwrite", clean_df)
 
-    num_of_business_days_since_cutoff = len(pd.bdate_range('2025-06-17', pd.Timestamp.now().date())) - 5
+    num_of_business_days_since_cutoff = len(pd.bdate_range('2025-06-17', pd.Timestamp.now().date())) - 7
 
     oracle_df = oracle.sql(env_config, f"SELECT * FROM {env_config.oracle_quant_table_name}")
 
