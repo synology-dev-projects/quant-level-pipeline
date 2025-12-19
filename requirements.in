@@ -4,3 +4,5 @@ pydantic
 pydantic_settings
 pytest
 SQLAlchemy
+requests
+beautifulsoup4

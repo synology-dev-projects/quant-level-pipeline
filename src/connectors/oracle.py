@@ -1,314 +1,283 @@
 import logging
 import time
-
-import pandas
-import sqlalchemy as sa
 import pandas as pd
+import sqlalchemy as sa
 from sqlalchemy.exc import NoSuchTableError
-from src.connectors.config import Config
-import oracledb
+from config import Config
 
-class OracleConnector():
-    def __init__(self, config:Config):
-        self.conn = sa.create_engine(f"oracle+oracledb://{config.oracle_user}:{config.oracle_pass.get_secret_value()}@{config.oracle_host_ip}:1521/?service_name={config.oracle_service}")
-        self.inspector = sa.inspect(self.conn)
-        self.ORACLE_DTYPES = {
-            'symbol': sa.types.VARCHAR(20),
-            'barsize': sa.types.VARCHAR(7),
-            'datetime': sa.types.DATE(),
-            'open': sa.types.FLOAT,
-            'high': sa.types.FLOAT,
-            'low': sa.types.FLOAT,
-            'close': sa.types.BIGINT,
-            'volume': sa.types.BIGINT,
-            'barcount': sa.types.FLOAT,
-            'wap': sa.types.FLOAT
-        }
 
-    def insert_into_table(self, df:pd.DataFrame, table_name: str, write_mode: str, primary_keys: [str]) -> None:
-        """
-        Used by main interface to insert df into oracle
-        :param write_mode: ignore, upser and overwrite
-        :param table_name:
-        :param df: df to be inserted
-        :return:
-        """
+# --- INTERNAL HELPER: CONNECTION FACTORY ---
+def _get_engine(config: Config) -> sa.Engine:
+    """
+    Creates a SQLAlchemy engine on demand using config credentials.
+    """
+    dsn = f"oracle+oracledb://{config.oracle_user}:{config.oracle_pass.get_secret_value()}@{config.oracle_host_ip}:1521/?service_name={config.oracle_service}"
+    return sa.create_engine(dsn)
 
-        start_time = time.time()
-        write_mode = write_mode.lower()
-        if write_mode == 'ignore':
-            self._df_to_oracle_insert_ignore(df, table_name)
-        elif write_mode == 'upsert':
-                self._df_to_oracle_upsert(df, table_name, primary_keys)
-        elif write_mode ==  'overwrite':
-            self._df_to_oracle_overwrite(df, table_name, primary_keys)
-        else:
-            raise Exception("Invalid write mode")
 
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        # TODO log number of records  written
-        # logging.info(f"Number of Records inserted oracle table {table_name}: {len(df.index)}")
-        logging.info(f"Execution time: {elapsed_time:.4f} seconds")
+# ==============================================================================
+# PUBLIC API (These take 'config' as the entry point)
+# ==============================================================================
 
-    def drop_table_if_exists(self, table_name: str) -> None:
-        """
-        Uses reflection to drop a table if exists
-        :param table_name:
-        :return:
-        """
-        try:
-            # Attempt to reflect the table.
-            tbl = sa.Table(table_name.lower(), sa.MetaData(), autoload_with=self.conn) #SQLAlchemy's default behavior is to treat all-lowercase names as case-insensitive
-            logging.info(f"Table '{table_name}' found. Dropping it now...")
+def execute(config: Config, sql_statement: str) -> None:
+    """
+    Executes a SQL statement that does not return rows (DELETE, UPDATE, etc.)
+    and automatically commits.
+    """
+    start_time = time.time()
 
-            with self.connect() as conn:
-                tbl.drop(conn)  # Drop table
+    engine = _get_engine(config)
+    try:
+        # engine.begin() automatically starts a transaction and commits at the end
+        with engine.begin() as conn:
+            conn.execute(sa.text(sql_statement))
+    finally:
+        engine.dispose()
 
-            logging.info(f"Table '{table_name}' successfully dropped.")
-        except NoSuchTableError:
-            logging.warning(f"Warning did find '{table_name}' in schema")
+    end_time = time.time()
+    logging.info(f"Query time: {end_time - start_time:.4f} seconds")
 
-    def sql(self, sql_query) -> pd.DataFrame:
-        """
-        Used to query db
-        :param sql_query:
-        :return:
-        """
 
-        df = pd.read_sql_query(sql_query, self.conn, parse_dates={"DATETIME": '%Y-%m-%d'})
+
+def sql(config: Config, sql_query: str) -> pd.DataFrame:
+    """
+    Executes a read-only SQL query and returns a DataFrame.
+    """
+    start_time = time.time()
+
+    engine = _get_engine(config)
+    try:
+        # read_sql_query manages connection open/close automatically with an engine
+        df = pd.read_sql_query(sql_query, engine, parse_dates={"DATETIME": '%Y-%m-%d'})
         df.columns = df.columns.str.upper()
         return df
+    finally:
+        engine.dispose()
 
-    def connect(self) -> sa.engine.Connection:
-        return self.conn.connect()
-
-    #-------------------------------------PRIVATE-----------------------------------------#
-
-    def _df_to_oracle_overwrite(self, df: pandas.DataFrame, table_name: str, primary_keys: [str]) -> int:
-        """
-        Writes table to oracle / Will overwrite if there's anything of the same name
-        :param sa_table_object:
-        :return:
-        """
-
-        #1. Drop table if exists
-        self.drop_table_if_exists(table_name)
-        df = self._lowercase_col_df(df.copy())
-
-        #2. convert df into sa table obj
-        sa_type_dict = OracleConnector._df_to_sa_types(df)
-
-            #Sets the pk if identified
-        columns = []
-        for col_name, sql_type in sa_type_dict.items():
-            is_pk = (col_name.lower() in (s.lower() for s in primary_keys))
-            columns.append(sa.Column(col_name, sql_type, primary_key=is_pk))
-
-        # Define the temporary table using the inferred columns
-        tbl = sa.Table(
-            table_name,
-            sa.MetaData(),
-            *columns,  # Unpack the list of Column objects
-        )
-
-        # self.drop_table_if_exists(table_name)
-        #3. Create table
-        with self.connect() as conn:
-            tbl.create(conn)
-            logging.info(f"Table '{table_name}' structure created.")
-
-            # Convert DataFrame to a list of dictionaries for bulk insertion
-            # df = self._capatilize_df(df)
-            data_to_insert = df.to_dict(orient='records')
-
-            # Insert data_tools into the temporary table
-            if data_to_insert:  # Only execute insert if there's data_tools
-                conn.execute(sa.insert(tbl), data_to_insert)
-                conn.commit()
-            else:
-                logging.info(f"Oracle table created {table_name}")
+    end_time = time.time()
+    logging.info(f"Execution time: {end_time - start_time:.4f} seconds")
 
 
-        return len(df.index) #return number of records inserted
+def drop_table_if_exists(config: Config, table_name: str) -> None:
+    """
+    Public wrapper to drop a table using a fresh connection.
+    """
+    start_time = time.time()
+
+    table_name = table_name.upper()
+    engine = _get_engine(config)
+    try:
+        _drop_table_internal(engine, table_name)
+    finally:
+        engine.dispose()
 
 
-    def _df_to_oracle_upsert(self, df:pd.DataFrame, table_name: str, primary_keys: [str]) -> int:
-        """
-        will insert and update any records based off pk
-        :param df:
-        :param table_name:
-        :return:
-        """
-        #1 Insert df into a temp table
-        temp_table_name = "temp_table_name".upper()
-        self.drop_table_if_exists(temp_table_name)
-        temp_table = self._df_to_oracle_overwrite(df, temp_table_name, primary_keys)
-
-        merge_sql = self._create_merge_statement(temp_table_name, table_name, "upsert")
-        logging.info(f"Executing MERGE statement:\n{merge_sql}")
-
-        #3: Execute the MERGE statement
-        try:
-            with self.connect() as conn:
-                conn.execute(sa.text(merge_sql))
-                conn.commit()
-            logging.info("MERGE statement executed successfully.")
-        except Exception as e:
-            logging.error(f"An unexpected error occurred during upsert: {e}")
-            raise
-        finally:
-            self.drop_table_if_exists(temp_table_name)
+def insert_into_table(config: Config, df: pd.DataFrame, table_name: str, write_mode: str,
+                      primary_keys: [str]) -> None:
+    """
+    Main interface to insert df into oracle.
+    :param df:
+    :param table_name:
+    :param primary_keys:
+    :param write_mode: 'ignore', 'upsert', or 'overwrite'
+    """
+    start_time = time.time()
+    write_mode = write_mode.lower()
+    table_name = table_name.upper()
+    engine = _get_engine(config)
 
 
-    def _df_to_oracle_insert_ignore(self, df: pd.DataFrame, table_name: str, primary_keys: [str]) -> int:
-        """
-        will not insert any records that violate primary_id contraints
-        :param df:
-        :param table_name:
-        :return:
-        """
-        # 1 Create temp table to merge
-        temp_table_name = "temp_table_name".upper()
-        self.drop_table_if_exists(temp_table_name)
-        temp_table = self._df_to_oracle_overwrite(df, temp_table_name, primary_keys)
-
-        # 2 Create merge statement
-        merge_sql = self._create_merge_statement(temp_table_name, table_name, "ignore")
-        logging.info(f"Executing MERGE statement:\n{merge_sql}")
-
-        # 3: Execute the MERGE statement
-        try:
-            with self.connect() as conn:
-                conn.execute(sa.text(merge_sql))
-                conn.commit()
-            logging.info("MERGE statement executed successfully.")
-        except Exception as e:
-            logging.error(f"An unexpected error occurred during insert/ignore: {e}")
-            raise e
-        finally:
-            self.drop_table_if_exists(temp_table_name)
-
-    def _create_merge_statement(self, src_table_name: str, tgt_table_name: str, mode: str) -> str:
-        """
-        Creates the merge sql text to execute
-        :param src_table_name:
-        :param tgt_table_name:
-        :param mode: either upsert or ignore
-        :return:
-        """
-        col_list = self._get_col_list(tgt_table_name)
-        pk_col_list = self._get_pk(tgt_table_name)
-
-        # Convert column names to uppercase for Oracle's default case sensitivity
-        all_cols = [col.upper() for col in col_list]
-        unique_keys_upper = [col.upper() for col in pk_col_list]
-
-        # Columns for SET clause (for updates)
-        set_clauses = []
-
-        for col in all_cols:
-            if col not in unique_keys_upper:
-                set_clauses.append(f"T.{col} = S.{col}")
-        set_clause_str = ", ".join(set_clauses)
-
-        # Columns for INSERT clause
-        insert_cols_str = ", ".join(all_cols)
-        insert_values_str = ", ".join([f"S.{col}" for col in all_cols])
-
-        # ON clause for matching
-        on_clauses = [f"S.{key} = T.{key}" for key in unique_keys_upper]
-        on_clause_str = " AND ".join(on_clauses)
-
-        # update clause
-        mode = mode.lower()
-        if mode == "upsert":
-            update_clause_str = f"""
-                WHEN MATCHED THEN
-                   UPDATE SET {set_clause_str}
-                    """
-        elif mode == "ignore":
-            update_clause_str = ""
+    try:
+        if write_mode == 'ignore':
+            _df_to_oracle_insert_ignore(engine, df, table_name, primary_keys)
+        elif write_mode == 'upsert':
+            _df_to_oracle_upsert(engine, df, table_name, primary_keys)
+        elif write_mode == 'overwrite':
+            _df_to_oracle_overwrite(engine, df, table_name, primary_keys)
         else:
-            raise Exception("Invalid mode: " + mode)
+            raise ValueError("Invalid write mode. Use: ignore, upsert, or overwrite")
 
-        merge_sql = f"""
-               MERGE INTO {tgt_table_name.upper()} T
-               USING {src_table_name.upper()} S
-               ON ({on_clause_str})
-               {update_clause_str}
-               WHEN NOT MATCHED THEN
-                   INSERT ({insert_cols_str})
-                   VALUES ({insert_values_str})
-               """
+        end_time = time.time()
+        logging.info(f"Execution time for {table_name}: {end_time - start_time:.4f} seconds")
 
-        return merge_sql
-
-    # Smaller helper functions ----------------------------------------------------------------------------------------
-
-    def _check_if_table_exists(self, table_name: str) -> bool:
-        if self.inspector.has_table(table_name):
-            return True
-        return False
+    finally:
+        engine.dispose()
 
 
-    def _get_table_object(self, table_name: str) -> sa.Table:
-        metadata = sa.MetaData()
-        return sa.Table(table_name.lower(), metadata, autoload_with=self.conn)
+# ==============================================================================
+# PRIVATE IMPLEMENTATION (These take 'engine' to reuse connections)
+# ==============================================================================
 
-    # noinspection PyTypeChecker
-    def _get_col_list(self, table_name: str) -> [str]:
-        table = self._get_table_object(table_name)
-        if table.columns:
-            col_list = [col.name.upper() for col in table.columns]
+def _drop_table_internal(engine: sa.Engine, table_name: str) -> None:
+    """
+    Internal helper that uses an existing engine to drop a table.
+    """
+
+    try:
+        # Reflect table to see if it exists
+        meta = sa.MetaData()
+        tbl = sa.Table(table_name.lower(), meta, autoload_with=engine)
+
+        logging.info(f"Table '{table_name}' found. Dropping it now...")
+        with engine.begin() as conn:  # 'begin' automatically commits
+            tbl.drop(conn)
+        logging.info(f"Table '{table_name}' successfully dropped.")
+
+    except NoSuchTableError:
+        logging.warning(f"Table '{table_name}' not found in schema. Skipping drop.")
+    except Exception as e:
+        logging.error(f"Error dropping table {table_name}: {e}")
+
+
+def _df_to_oracle_overwrite(engine: sa.Engine, df: pd.DataFrame, table_name: str, primary_keys: [str]) -> int:
+    """
+    Writes table to oracle / Will overwrite if there's anything of the same name.
+    """
+    # 1. Drop table if exists
+    _drop_table_internal(engine, table_name)
+
+    # 2. Prepare DataFrame
+    df_clean = _lowercase_col_df(df.copy())
+    sa_type_dict = _df_to_sa_types(df_clean)
+
+    # 3. Define Schema (Columns + PKs)
+    columns = []
+    for col_name, sql_type in sa_type_dict.items():
+        is_pk = (col_name.lower() in (s.lower() for s in primary_keys))
+        columns.append(sa.Column(col_name, sql_type, primary_key=is_pk))
+
+    tbl = sa.Table(table_name, sa.MetaData(), *columns)
+
+    # 4. Create and Insert
+    with engine.begin() as conn:
+        tbl.create(conn)
+        logging.info(f"Table '{table_name}' structure created.")
+
+        #oracle doesnt accept nan, must convert to NONE
+        df_payload = df_clean.replace({float('nan'): None})
+
+        data_to_insert = df_payload.to_dict(orient='records')
+        if data_to_insert:
+            conn.execute(sa.insert(tbl), data_to_insert)
+
+    return len(df.index)
+
+
+def _df_to_oracle_upsert(engine: sa.Engine, df: pd.DataFrame, table_name: str, primary_keys: [str]) -> None:
+    """
+    Inserts and updates any records based off pk.
+    """
+    temp_table_name = "TEMP_" + table_name[:20]  # Shorten to ensure valid Oracle ID
+
+    # 1. Write to Temp Table
+    _df_to_oracle_overwrite(engine, df, temp_table_name, primary_keys)
+    # 2. Create Merge SQL
+    merge_sql = _create_merge_statement(engine, temp_table_name, table_name, "upsert")
+    logging.info(f"Executing MERGE (Upsert)")
+
+    # 3. Execute Merge
+    try:
+        with engine.begin() as conn:
+            conn.execute(sa.text(merge_sql))
+        logging.info("MERGE statement executed successfully.")
+    except Exception as e:
+        logging.error(f"Upsert failed: {e}")
+        raise
+    finally:
+        _drop_table_internal(engine, temp_table_name)
+
+
+def _df_to_oracle_insert_ignore(engine: sa.Engine, df: pd.DataFrame, table_name: str, primary_keys: [str]) -> None:
+    """
+    Will not insert any records that violate primary_id constraints.
+    """
+    temp_table_name = "TEMP_" + table_name[:20]
+
+    # 1. Write to Temp Table
+    _df_to_oracle_overwrite(engine, df, temp_table_name, primary_keys)
+
+    # 2. Create Merge SQL
+    merge_sql = _create_merge_statement(engine, temp_table_name, table_name, "ignore")
+    logging.info(f"Executing MERGE (Ignore Duplicates)")
+
+    # 3. Execute Merge
+    try:
+        with engine.begin() as conn:
+            conn.execute(sa.text(merge_sql))
+        logging.info("MERGE statement executed successfully.")
+    except Exception as e:
+        logging.error(f"Insert Ignore failed: {e}")
+        raise
+    finally:
+        _drop_table_internal(engine, temp_table_name)
+
+
+# ==============================================================================
+# HELPER FUNCTIONS (Stateless)
+# ==============================================================================
+
+def _create_merge_statement(engine: sa.Engine, src_table: str, tgt_table: str, mode: str) -> str:
+    """
+    Reflects the Target Table to build a dynamic MERGE statement.
+    """
+    # Reflect target table to get columns
+    inspector = sa.inspect(engine)
+    if not inspector.has_table(tgt_table.lower()):
+        raise NoSuchTableError(f"Target table {tgt_table} does not exist for merge.")
+
+    # Get columns and PKs
+    col_list = [col['name'].upper() for col in inspector.get_columns(tgt_table.lower())]
+    pk_list = [col.upper() for col in inspector.get_pk_constraint(tgt_table.lower())['constrained_columns']]
+
+    if not pk_list:
+        raise ValueError(f"Table {tgt_table} has no primary keys defined in Oracle.")
+
+    # Logic to build strings
+    set_clauses = [f"T.{col} = S.{col}" for col in col_list if col not in pk_list]
+    set_clause_str = ", ".join(set_clauses)
+
+    insert_cols_str = ", ".join(col_list)
+    insert_values_str = ", ".join([f"S.{col}" for col in col_list])
+
+    on_clause_str = " AND ".join([f"S.{key} = T.{key}" for key in pk_list])
+
+    mode = mode.lower()
+    if mode == "upsert":
+        # Oracle MERGE UPDATE clause cannot update columns used in the ON clause
+        update_part = f"WHEN MATCHED THEN UPDATE SET {set_clause_str}" if set_clauses else ""
+    elif mode == "ignore":
+        update_part = ""
+    else:
+        raise ValueError(f"Invalid mode: {mode}")
+
+    sql = f"""
+    MERGE INTO {tgt_table.upper()} T
+    USING {src_table.upper()} S
+    ON ({on_clause_str})
+    {update_part}
+    WHEN NOT MATCHED THEN
+        INSERT ({insert_cols_str})
+        VALUES ({insert_values_str})
+    """
+    return sql
+
+
+def _lowercase_col_df(df: pd.DataFrame) -> pd.DataFrame:
+    df.columns = df.columns.str.lower()
+    return df
+
+
+def _df_to_sa_types(df: pd.DataFrame, default_string_length: int = 255) -> dict:
+    types = {}
+    for col_name, dtype in df.dtypes.items():
+        if pd.api.types.is_integer_dtype(dtype):
+            types[col_name] = sa.Integer
+        elif pd.api.types.is_float_dtype(dtype):
+            types[col_name] = sa.Float
+        elif pd.api.types.is_bool_dtype(dtype):
+            types[col_name] = sa.Boolean
+        elif pd.api.types.is_datetime64_any_dtype(dtype):
+            types[col_name] = sa.DateTime
         else:
-            raise Exception("No Columns found in table")
-
-        return col_list
-
-    def _get_pk(self, table_name: str) -> [str]:
-        table = self._get_table_object(table_name)
-        if table.primary_key:
-            pk_columns = [col.name.upper() for col in table.primary_key.columns]
-        else:
-            raise Exception("No primary keys found in table")
-
-        return pk_columns
-
-    def _lowercase_col_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        df.columns =  df.columns.str.lower()
-        return df
-
-    #----Static functions ---------------------------------------------------------------------------------------------
-
-    @staticmethod
-    def _df_to_sa_types(df: pd.DataFrame, default_string_length: int = 255) -> dict:
-        df_sqlalchemy_types = {}
-        for col_name, dtype in df.dtypes.items():
-            if pd.api.types.is_integer_dtype(dtype):
-                df_sqlalchemy_types[col_name] = sa.Integer
-            elif pd.api.types.is_float_dtype(dtype):
-                df_sqlalchemy_types[col_name] = sa.Float
-            elif pd.api.types.is_bool_dtype(dtype):
-                df_sqlalchemy_types[col_name] = sa.Boolean
-            elif pd.api.types.is_datetime64_any_dtype(dtype):
-                df_sqlalchemy_types[col_name] = sa.DateTime
-            else:  # Default to String for object/string types
-                df_sqlalchemy_types[col_name] = sa.String(default_string_length)  # default to using max
-
-        return df_sqlalchemy_types
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            types[col_name] = sa.String(default_string_length)
+    return types

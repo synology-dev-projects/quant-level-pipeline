@@ -3,7 +3,6 @@ name: Branch-Based Deployment Pipeline
 # 1. RUN ON ALL BRANCHES
 on:
   push:
-    # This wildcard runs the workflow for 'develop', 'master', 'develop2', etc.
     branches: [ "**" ]
   workflow_dispatch:
 
@@ -15,6 +14,14 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # --- [NEW] STEP 1: FORCE CLEAN RUNNER WORKSPACE ---
+      - name: Clean Runner Workspace
+        run: |
+          echo "🧹 Cleaning previous runner artifacts..."
+          # This deletes everything in the current runner folder before checkout
+          rm -rf ./*
+          rm -rf ./.??*
+
       # --- SETUP ---
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -23,7 +30,6 @@ jobs:
 
       - name: Load Synology Paths
         run: |
-          # Internal Runner Path (Unchanged)
           cat ../../conf/syno_paths.env >> $GITHUB_ENV
 
       - name: Install Dependencies
@@ -31,62 +37,70 @@ jobs:
           # 1. Check if .venv exists
           if [ ! -d ".venv" ]; then
             echo "Creating virtual environment..."
-            
-            echo "Python version" 
             python3 -m venv .venv
           else
             echo "Virtual environment found."
           fi
           
-          # 2. Activate specifically for this step to install requirements
+          # 2. Activate venv
           source .venv/bin/activate
-          
           pip install --upgrade pip
+          
+          # 3. AUTO-UPDATE DEPENDENCIES
+          pip install pip-tools
+          
+          if [ -f "requirements.in" ]; then
+            echo "🔄 Compiling requirements.in..."
+            pip-compile requirements.in --output-file=requirements.txt
+          else
+            echo "⚠️ No requirements.in found, skipping auto-compile."
+          fi
+          
           pip install -r requirements.txt
           
-          # 3. CRITICAL: Add venv to GITHUB_PATH
-          # This ensures the 'verify.sh' step later uses this python/pytest automatically
+          # 5. Add venv to GITHUB_PATH for subsequent steps
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      # --- DYNAMIC DEPLOYMENT ---
+      # --- [UPDATED] DYNAMIC DEPLOYMENT ---
       - name: Deploy to Branch Folder
         run: |
-          # 1. Get the branch name (e.g., 'develop', 'master', 'develop2')
           BRANCH_NAME="${{ github.ref_name }}"
           REPO_NAME="${{ github.event.repository.name }}"
-          
-          # 2. Construct the Dynamic Path
-          # Format: git-repos/{BRANCH}/{REPO}
-          # Example: /volume2/.../git-repos/develop/quant-level-pipeline
           TARGET_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${BRANCH_NAME}/${REPO_NAME}"
           
           echo "📂 Branch detected: $BRANCH_NAME"
           echo "🚀 Deploying to: $TARGET_PATH"
           
-          # 3. Create directory and copy
+          # Ensure target directory exists
           mkdir -p "$TARGET_PATH"
-          cp -ru src/ "$TARGET_PATH/"
-          cp -ru tests/ "$TARGET_PATH/"
+
+          # --- FIX IS HERE: WIPE OLD CODE BEFORE COPYING ---
+          # We delete the specific source folders to remove files you deleted in git.
+          echo "🧹 Wiping old src/ and tests/ in destination..."
+          rm -rf "$TARGET_PATH/src"
+          rm -rf "$TARGET_PATH/tests"
+          rm -f "$TARGET_PATH/verify.sh"
+
+          # Now copy fresh (No -u flag needed, we want exact copy)
+          cp -r src/ "$TARGET_PATH/"
+          cp -r tests/ "$TARGET_PATH/"
           cp verify.sh "$TARGET_PATH/"
           
-          # 4. Save path for the verification step
           echo "DEPLOY_DIR=$TARGET_PATH" >> $GITHUB_ENV
 
-      # --- SECRET INJECTION (The Security Layer) ---
+      # --- SECRET INJECTION ---
       - name: Create Runtime .env File
         run: |
-          # This writes the .env file directly into the deployment folder
           ENV_FILE="${{ env.DEPLOY_DIR }}/.env"
           
           echo "Generating secure .env file at $ENV_FILE..."
           
-          # Inject secrets from GitHub Vault
           echo "ORACLE_USER=${{ secrets.ORACLE_USER }}" > "$ENV_FILE"
           echo "ORACLE_PASS=${{ secrets.ORACLE_PASS }}" >> "$ENV_FILE"
           echo "ORACLE_HOST_IP=${{ secrets.ORACLE_HOST_IP }}" >> "$ENV_FILE"
           echo "ORACLE_SERVICE=${{ secrets.ORACLE_SERVICE }}" >> "$ENV_FILE"
+          echo "TE_COOKIE=${{ secrets.TE_COOKIE }}" >> "$ENV_FILE"
           
-          # Lock it down (Owner Read/Write only)
           chmod 600 "$ENV_FILE"
 
       # --- VERIFICATION ---
@@ -97,9 +111,7 @@ jobs:
           chmod +x verify.sh
           ./verify.sh
 
-      # --- CONDITIONAL MERGE (Only for 'develop') ---
-      # If we are on 'develop' and tests passed, merge to 'master'.
-      # This push to 'master' will trigger this workflow AGAIN to deploy the master folder.
+      # --- CONDITIONAL MERGE ---
       - name: Auto-Promote to Master
         if: github.ref_name == 'develop'
         run: |
@@ -108,10 +120,13 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
+          # FIX: Discard the auto-generated requirements.txt changes 
+          # so we can switch branches safely.
+          git reset --hard
+          
           git fetch origin develop
           git checkout master
           git pull origin master
           
-          # Merge and Push
           git merge origin/develop --no-ff -m "Auto-merge develop to master [Skip CI]"
           git push origin master
