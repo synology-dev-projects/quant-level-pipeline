@@ -1,8 +1,8 @@
 import logging
 import pandas as pd
 from datetime import datetime, timezone
-from src.connectors import oracle
-from src.config import Config
+from connectors import oracle
+from config import Config
 import sys
 
 class CutoffDateNotFoundError(Exception):

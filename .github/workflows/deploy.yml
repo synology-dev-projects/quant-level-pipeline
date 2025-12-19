@@ -112,7 +112,7 @@ jobs:
           echo "ORACLE_SERVICE=${{ secrets.ORACLE_SERVICE }}" >> "$ENV_FILE"
           echo "TE_COOKIE=${{ secrets.TE_COOKIE }}" >> "$ENV_FILE"
           
-          chmod 600 "$ENV_FILE"
+          chmod 644 "$ENV_FILE"
 
       # 7. VERIFICATION
       - name: Run Verification

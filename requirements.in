@@ -6,3 +6,4 @@ pytest
 SQLAlchemy
 requests
 beautifulsoup4
+cryptography
