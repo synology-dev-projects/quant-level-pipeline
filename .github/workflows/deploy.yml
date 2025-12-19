@@ -85,6 +85,7 @@ jobs:
           echo "ORACLE_PASS=${{ secrets.ORACLE_PASS }}" >> "$ENV_FILE"
           echo "ORACLE_HOST_IP=${{ secrets.ORACLE_HOST_IP }}" >> "$ENV_FILE"
           echo "ORACLE_SERVICE=${{ secrets.ORACLE_SERVICE }}" >> "$ENV_FILE"
+          echo "TE_COOKIE=${{ secrets.TE_COOKIE }}" >> "$ENV_FILE"
           
           # Lock it down (Owner Read/Write only)
           chmod 600 "$ENV_FILE"
