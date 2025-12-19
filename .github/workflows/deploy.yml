@@ -27,6 +27,8 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          # Use your PAT here instead of the default token
+          token: ${{ secrets.MY_GITHUB_PAT }}
 
       - name: Load Synology Paths
         run: |
