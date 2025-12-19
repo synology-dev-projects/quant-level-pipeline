@@ -1,4 +1,4 @@
-from src import extract, transform, load, config
+import extract, transform, load, config
 
 
 def main():
