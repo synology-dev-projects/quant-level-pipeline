@@ -1,17 +1,13 @@
-import sys
 from typing import Dict, Any, Optional
-
-from numpy.core.defchararray import strip
-
 from config import Config
 import logging
 import requests
 import time
 from datetime import datetime, timedelta
 from dateutil import parser
-import numpy as np
 from bs4 import BeautifulSoup
 import re
+
 class NoSuchElementException:
     pass
 

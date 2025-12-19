@@ -1,15 +1,12 @@
 # tests/conftest.py
 import pytest
-from src import extract, config as config_module  # adjust imports as needed
-from transform import _parse_quant_levels_to_data, _deduplicate_days, _deduplicate_rows
-import extract, transform, load, config
+import extract, transform, config
 
-# import your internal functions: _parse_quant_levels_to_data, etc.
 
 @pytest.fixture(scope="session")
 def env_config():
     """Load config once for the whole session."""
-    return config_module.load_config()
+    return config.load_config()
 
 
 @pytest.fixture(scope="session")
