@@ -120,6 +120,10 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           
+          # FIX: Discard the auto-generated requirements.txt changes 
+          # so we can switch branches safely.
+          git reset --hard
+          
           git fetch origin develop
           git checkout master
           git pull origin master
