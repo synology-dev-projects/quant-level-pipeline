@@ -6,6 +6,8 @@
 #
 annotated-types==0.7.0
     # via pydantic
+beautifulsoup4==4.14.3
+    # via -r requirements.in
 certifi==2025.11.12
     # via requests
 cffi==1.17.1
@@ -56,6 +58,8 @@ requests==2.32.4
     # via -r requirements.in
 six==1.17.0
     # via python-dateutil
+soupsieve==2.7
+    # via beautifulsoup4
 sqlalchemy==2.0.45
     # via -r requirements.in
 tomli==2.3.0
@@ -63,6 +67,7 @@ tomli==2.3.0
 typing-extensions==4.13.2
     # via
     #   annotated-types
+    #   beautifulsoup4
     #   cryptography
     #   exceptiongroup
     #   pydantic
