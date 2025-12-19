@@ -1,6 +1,5 @@
 name: Branch-Based Deployment Pipeline
 
-# 1. RUN ON ALL BRANCHES
 on:
   push:
     branches: [ "**" ]
@@ -14,87 +13,94 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # --- [NEW] STEP 1: FORCE CLEAN RUNNER WORKSPACE ---
+      # 1. CLEANUP (Runner Workspace)
       - name: Clean Runner Workspace
         run: |
           echo "🧹 Cleaning previous runner artifacts..."
-          # This deletes everything in the current runner folder before checkout
           rm -rf ./*
           rm -rf ./.??*
 
-      # --- SETUP ---
+      # 2. CHECKOUT
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          # Use your PAT here instead of the default token
-          token: ${{ secrets.MY_GITHUB_PAT }}
 
-      - name: Load Synology Paths
+      # 3. SETUP VARIABLES (Calculate Path EARLY)
+      - name: Configure Deployment Paths
         run: |
+          # Load Synology Root
           cat ../../conf/syno_paths.env >> $GITHUB_ENV
-
-      - name: Install Dependencies
-        run: |
-          # 1. Check if .venv exists
-          if [ ! -d ".venv" ]; then
-            echo "Creating virtual environment..."
-            python3 -m venv .venv
-          else
-            echo "Virtual environment found."
-          fi
           
-          # 2. Activate venv
-          source .venv/bin/activate
-          pip install --upgrade pip
-          
-          # 3. AUTO-UPDATE DEPENDENCIES
-          pip install pip-tools
-          
-          if [ -f "requirements.in" ]; then
-            echo "🔄 Compiling requirements.in..."
-            pip-compile requirements.in --output-file=requirements.txt
-          else
-            echo "⚠️ No requirements.in found, skipping auto-compile."
-          fi
-          
-          pip install -r requirements.txt
-          
-          # 5. Add venv to GITHUB_PATH for subsequent steps
-          echo "$PWD/.venv/bin" >> $GITHUB_PATH
-
-      # --- [UPDATED] DYNAMIC DEPLOYMENT ---
-      - name: Deploy to Branch Folder
-        run: |
+          # Calculate Variables
           BRANCH_NAME="${{ github.ref_name }}"
           REPO_NAME="${{ github.event.repository.name }}"
-          TARGET_PATH="${{ env.SYNOLOGY_ROOT_PATH }}/${BRANCH_NAME}/${REPO_NAME}"
           
-          echo "📂 Branch detected: $BRANCH_NAME"
-          echo "🚀 Deploying to: $TARGET_PATH"
+          # Read SYNOLOGY_ROOT_PATH from the file we just loaded
+          source ../../conf/syno_paths.env
+          TARGET_PATH="${SYNOLOGY_ROOT_PATH}/${BRANCH_NAME}/${REPO_NAME}"
           
-          # Ensure target directory exists
+          echo "📂 Target Path: $TARGET_PATH"
+          echo "DEPLOY_DIR=$TARGET_PATH" >> $GITHUB_ENV
+
+      # 4. DEPLOY CODE (Copy files BEFORE installing deps)
+      - name: Sync Code to Project Root
+        run: |
+          TARGET_PATH="${{ env.DEPLOY_DIR }}"
           mkdir -p "$TARGET_PATH"
 
-          # --- FIX IS HERE: WIPE OLD CODE BEFORE COPYING ---
-          # We delete the specific source folders to remove files you deleted in git.
-          echo "🧹 Wiping old src/ and tests/ in destination..."
+          # Wipe OLD source code to ensure deleted files are removed
+          # NOTE: We do NOT delete .venv, allowing it to persist!
+          echo "🧹 Wiping old src/, tests/, and configs..."
           rm -rf "$TARGET_PATH/src"
           rm -rf "$TARGET_PATH/tests"
           rm -f "$TARGET_PATH/verify.sh"
+          rm -f "$TARGET_PATH/requirements.txt"
+          rm -f "$TARGET_PATH/requirements.in"
 
-          # Now copy fresh (No -u flag needed, we want exact copy)
-          cp -r src/ "$TARGET_PATH/"
-          cp -r tests/ "$TARGET_PATH/"
+          # Copy NEW files to the persistent project root
+          echo "🚀 Copying new files..."
+          cp -r src "$TARGET_PATH/"
+          cp -r tests "$TARGET_PATH/"
           cp verify.sh "$TARGET_PATH/"
           
-          echo "DEPLOY_DIR=$TARGET_PATH" >> $GITHUB_ENV
+          # Copy requirement files if they exist
+          [ -f requirements.txt ] && cp requirements.txt "$TARGET_PATH/"
+          [ -f requirements.in ] && cp requirements.in "$TARGET_PATH/"
 
-      # --- SECRET INJECTION ---
+      # 5. MANAGE VENV (Run execution INSIDE Project Root)
+      - name: Update Project Virtualenv
+        run: |
+          cd "${{ env.DEPLOY_DIR }}"
+          
+          # 1. Create .venv only if it doesn't exist (Persists between runs!)
+          if [ ! -d ".venv" ]; then
+            echo "🔨 Creating new virtual environment in project root..."
+            python3 -m venv .venv
+          else
+            echo "✅ Existing .venv found. Updating..."
+          fi
+          
+          # 2. Activate
+          source .venv/bin/activate
+          pip install --upgrade pip pip-tools
+          
+          # 3. Compile/Install
+          if [ -f "requirements.in" ]; then
+            echo "🔄 Compiling requirements.in..."
+            pip-compile requirements.in --output-file=requirements.txt
+          fi
+          
+          echo "📦 Installing dependencies..."
+          pip install -r requirements.txt
+          
+          # 4. Add to Path (so verify.sh finds it)
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      # 6. SECRET INJECTION
       - name: Create Runtime .env File
         run: |
           ENV_FILE="${{ env.DEPLOY_DIR }}/.env"
-          
           echo "Generating secure .env file at $ENV_FILE..."
           
           echo "ORACLE_USER=${{ secrets.ORACLE_USER }}" > "$ENV_FILE"
@@ -105,30 +111,25 @@ jobs:
           
           chmod 600 "$ENV_FILE"
 
-      # --- VERIFICATION ---
+      # 7. VERIFICATION
       - name: Run Verification
         run: |
           echo "🧪 Testing branch: ${{ github.ref_name }}"
           cd "${{ env.DEPLOY_DIR }}"
           chmod +x verify.sh
+          
+          # We don't need to source activate because we added it to GITHUB_PATH above
           ./verify.sh
 
-      # --- CONDITIONAL MERGE ---
+      # 8. MERGE LOGIC (Unchanged)
       - name: Auto-Promote to Master
         if: github.ref_name == 'develop'
         run: |
           echo "✅ Develop verified. Promoting to Master..."
-          
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-          
-          # FIX: Discard the auto-generated requirements.txt changes 
-          # so we can switch branches safely.
-          git reset --hard
-          
           git fetch origin develop
           git checkout master
           git pull origin master
-          
           git merge origin/develop --no-ff -m "Auto-merge develop to master [Skip CI]"
           git push origin master
