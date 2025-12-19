@@ -119,9 +119,11 @@ jobs:
         run: |
           echo "🧪 Testing branch: ${{ github.ref_name }}"
           cd "${{ env.DEPLOY_DIR }}"
-          chmod +x verify.sh
           
-          # We don't need to source activate because we added it to GITHUB_PATH above
+          # Force the environment to use the local venv first
+          export PATH="$(pwd)/.venv/bin:$PATH"
+          
+          chmod +x verify.sh
           ./verify.sh
 
       # 8. MERGE LOGIC (Unchanged)
