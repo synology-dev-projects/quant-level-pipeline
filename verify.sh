@@ -12,10 +12,11 @@ echo "========================================"
 # 2. Ensure we are running inside the correct folder
 # This trick ensures the script always runs relative to itself,
 # no matter where you call it from.
+export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-echo "📂 Working Directory: $(pwd)"
+echo "📂 Working Directory: $(PYTHONPATH)"
 
 # This makes sure we use the isolated environment if it exists.
 if [ -d ".venv" ]; then
