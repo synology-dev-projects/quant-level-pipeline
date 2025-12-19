@@ -54,7 +54,14 @@ def test_incremental_load(env_config, pipeline_data):
     clean_df = transform.run(env_config,raw_post_json)
     load.run(env_config, "upsert", clean_df)
 
-    num_of_business_days_since_cutoff = len(pd.bdate_range(cuffoff_date.strftime('%Y-%m-%d'), pd.Timestamp.now().date())) - 1
+    market_now = pd.Timestamp.now(tz='US/Eastern').date()
+
+    # 2. Use that date for your calculation
+    # Cutoff (Dec 17) -> Market Now (Dec 18) = 2 Days.
+    # len(2) - 1 = 1 Expected Day.
+    num_of_business_days_since_cutoff = len(pd.bdate_range(
+        cuffoff_date.strftime('%Y-%m-%d'),
+        market_now)) - 1
 
     count_after_load = oracle.sql(env_config, f"SELECT count(1) FROM {env_config.oracle_quant_table_name}").iloc[0, 0]
     oracle_df = oracle.sql(env_config, f"SELECT * FROM {env_config.oracle_quant_table_name}")
