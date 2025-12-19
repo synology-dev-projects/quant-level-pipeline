@@ -1,37 +1,18 @@
-#!/bin/bash
-set -e
+# Inside verify.sh
 
-# 1. System Path Recovery (Safe for Linux & Windows)
-export PATH="/usr/bin:/bin:/usr/local/bin:$PATH"
-
-echo "========================================"
-echo "    VERIFICATION SCRIPT STARTED"
-echo "========================================"
-
-# 2. Set Directory Context
+# Get the absolute path of the directory where verify.sh sits
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
+VENV_PATH="$SCRIPT_DIR/.venv"
 
-# 3. Set PYTHONPATH (Directly to 'src')
-# This ensures modules in 'src/' are importable from 'tests/'
-export PYTHONPATH="$(pwd)/src:$PYTHONPATH"
-
-echo "📂 Working Directory: $(pwd)"
-echo "🐍 Python Path: $PYTHONPATH"
-
-# 4. Activate Virtual Environment (Cross-Platform)
-if [ -d ".venv" ]; then
-    echo "⚙️  Found .venv... Activating."
-    if [ -f ".venv/bin/activate" ]; then
-        source .venv/bin/activate
-    elif [ -f ".venv/Scripts/activate" ]; then
-        source .venv/Scripts/activate
-    fi
+if [ -d "$VENV_PATH" ]; then
+    echo "⚙️ Found local .venv at $VENV_PATH... Activating."
+    source "$VENV_PATH/bin/activate"
+    # Double check we are using the right one
+    echo "🐍 Python Location: $(which python)"
 else
-    echo "⚠️  No .venv found."
+    echo "❌ CRITICAL: Local .venv not found in $SCRIPT_DIR"
+    exit 1
 fi
 
-# 5. Run Tests
-echo "🐍 Using Python: $(which python)"
-echo "🚀 Running Pytest..."
+# Run pytest using the 'python -m' syntax
 python -m pytest -v tests/
