@@ -14,5 +14,8 @@ else
     exit 1
 fi
 
+export PYTHONPATH="$SCRIPT_DIR/src:$PYTHONPATH"
+echo "📂 PYTHONPATH set to: $PYTHONPATH"
+
 # Run pytest using the 'python -m' syntax
 python -m pytest -v tests/
