@@ -33,6 +33,7 @@ jobs:
       - name: Configure Deployment Paths
         run: |
           # Load Synology Root
+          umask 002
           cat ../../conf/syno_paths.env >> $GITHUB_ENV
           
           # Calculate Variables
@@ -66,6 +67,9 @@ jobs:
           cp -r src "$TARGET_PATH/"
           cp -r tests "$TARGET_PATH/"
           cp verify.sh "$TARGET_PATH/"
+          
+          sudo chown -R rachardv:users "$TARGET_PATH"
+          chmod -R 775 "$TARGET_PATH"
           
           # Copy requirement files if they exist
           [ -f requirements.txt ] && cp requirements.txt "$TARGET_PATH/"
