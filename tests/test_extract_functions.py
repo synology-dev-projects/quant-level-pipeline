@@ -2,9 +2,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from config import load_config
-from extract import _fetch_raw_feed, _extract_file_link, _parse_feed_data, _get_file_content, \
-    _extract_quant_levels_from_post_body
+import common_lib.config.main_config as config
+from extract import  _get_file_content
 import json
 
 def test_extract_has_file_property(env_config, pipeline_data):

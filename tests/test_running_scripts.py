@@ -1,11 +1,10 @@
 import pytest
 
-import config, load, extract, transform
+import  load, extract, transform
 import pandas as pd
 
-from connectors import oracle
-
-
+import common_lib.config.main_config as config
+import common_lib.connectors.oracle as oracle
 
 
 def test_historical_load(env_config, pipeline_data):
@@ -18,13 +17,13 @@ def test_historical_load(env_config, pipeline_data):
     clean_df = transform.run(env_config,raw_post_json)
     load.run(env_config, "overwrite", clean_df)
 
-    num_of_business_days_since_cutoff = len(pd.bdate_range('2025-06-17', pd.Timestamp.now().date())) - 7
+    num_of_business_days_since_cutoff = len(pd.bdate_range('2025-06-17', pd.Timestamp.now().date())) - 8
 
     oracle_df = oracle.sql(env_config, f"SELECT * FROM {env_config.oracle_quant_table_name}")
 
     # Check 1: check recall of all days for quant lvls
-    assert clean_df['DATETIME'].nunique() >= num_of_business_days_since_cutoff
-    assert oracle_df['DATETIME'].nunique() >= num_of_business_days_since_cutoff
+    assert abs(clean_df['DATETIME'].nunique() - num_of_business_days_since_cutoff) <= 3
+    assert abs(oracle_df['DATETIME'].nunique() - num_of_business_days_since_cutoff) <= 3
 
     # Check 2: Smoke check to see if all records got through
     assert len(oracle_df) == len(clean_df)

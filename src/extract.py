@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from config import Config
+from common_lib.config.main_config import MainConfig as Config
 import logging
 import requests
 import time
