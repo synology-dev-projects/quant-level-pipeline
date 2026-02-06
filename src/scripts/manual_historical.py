@@ -1,7 +1,8 @@
-import extract, transform, load, config
+import extract, transform, load
 import logging
 logger = logging.getLogger(__name__)
 import sys
+import common_lib.config.main_config as config
 
 def main():
     env_config = config.load_config()
