@@ -80,4 +80,14 @@ def _get_latest_recorded_date(config: Config) -> datetime:
         logger.warning(f"Database error while fetching date: {e}")
         raise CutoffDateNotFoundError(f"Could not retrieve cutoff date due to DB error: {e}")
 
+def _quant_lvl_df_to_string(df: pd.DataFrame) -> str:
+    date = df['DATETIME'].iloc[0].date()
+    header = f"QUANT LVL FOR DATE: {date}"
+    df_str = (df[['START_LVL_PRICE', 'END_LVL_PRICE', 'COMMENTS', 'BUY_SELL_IND']]
+              .sort_values(by='START_LVL_PRICE', ascending=False)
+              .to_string(index=False, header=False))
+
+    msg_str = f"{header}\n{df_str}"
+    return msg_str
+
 

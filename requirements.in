@@ -5,3 +5,4 @@ SQLAlchemy
 requests
 beautifulsoup4
 cryptography
+tabulate

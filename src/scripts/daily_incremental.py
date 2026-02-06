@@ -1,7 +1,9 @@
-import extract, transform, load, config
+import extract, transform, load
 import logging
 logger = logging.getLogger(__name__)
 import sys
+import common_lib.config.main_config as config
+import common_lib.connectors.nfty as nfty
 
 
 def main():
@@ -19,6 +21,12 @@ def main():
 
     # 2. Transform unstructured data to structured df
     clean_df = transform.run(env_config,raw_post_json)
+
+    df_str = load._quant_lvl_df_to_string(clean_df)
+    nfty_response = nfty.send_ntfy_notification(env_config.ntfy_endpoint, "quant_alerts", "NEW QUANT LVLS", df_str,
+                                                3)
+
+    #TODO send ntfy notif if process fails
 
     # 3. Load df to oracle
     load.run(env_config, "upsert", clean_df)

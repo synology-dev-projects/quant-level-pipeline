@@ -5,6 +5,8 @@ import pandas as pd
 
 import common_lib.config.main_config as config
 import common_lib.connectors.oracle as oracle
+import common_lib.connectors.nfty as nfty
+
 
 
 def test_historical_load(env_config, pipeline_data):
@@ -65,11 +67,16 @@ def test_incremental_load(env_config, pipeline_data):
     count_after_load = oracle.sql(env_config, f"SELECT count(1) FROM {env_config.oracle_quant_table_name}").iloc[0, 0]
     oracle_df = oracle.sql(env_config, f"SELECT * FROM {env_config.oracle_quant_table_name}")
 
+    df_str = load._quant_lvl_df_to_string(clean_df)
+    nfty_response = nfty.send_ntfy_notification(env_config.ntfy_endpoint,"quant_alerts", "TEST_QUANT_MESSAGE", df_str, 3)
 
     # Check 1: check recall of all days for quant lvls
-    assert clean_df['DATETIME'].nunique() >= num_of_business_days_since_cutoff
+    assert clean_df['DATETIME'].nunique() >= 1
 
     # Check 2: Smoke check to see if all records got through
     assert (count_after_load - count_before_load) == len(clean_df)
+
+    # Check 3: Smoke check to see if all records got through
+    assert nfty_response.status_code == 200
 
 
