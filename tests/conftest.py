@@ -1,6 +1,9 @@
 # tests/conftest.py
 import pytest
-import extract, transform, config
+import extract, transform
+
+import common_lib.config.main_config as config
+
 
 
 @pytest.fixture(scope="session")

@@ -7,7 +7,7 @@ import re
 import pandas as pd
 from pandas.core.interchange.dataframe_protocol import DataFrame
 
-from config import Config
+from common_lib.config.main_config import MainConfig as Config
 
 # Assuming your function is in a file named 'quant_logic.py' or similar.
 # If it's in this file, you can paste it above.

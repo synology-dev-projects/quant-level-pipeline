@@ -56,11 +56,9 @@ jobs:
           # Wipe OLD source code to ensure deleted files are removed
           # NOTE: We do NOT delete .venv, allowing it to persist!
           echo "🧹 Wiping old src/, tests/, and configs..."
-          rm -rf "$TARGET_PATH/src"
-          rm -rf "$TARGET_PATH/tests"
-          rm -f "$TARGET_PATH/verify.sh"
-          rm -f "$TARGET_PATH/requirements.txt"
-          rm -f "$TARGET_PATH/requirements.in"
+          rm -rf "$TARGET_PATH/*"
+          rm -rf "$TARGET_PATH/.venv"
+
 
           # Copy NEW files to the persistent project root
           echo "🚀 Copying new files..."
@@ -83,10 +81,10 @@ jobs:
           
           # 1. Create .venv only if it doesn't exist (Persists between runs!)
           if [ ! -d ".venv" ]; then
-            echo "🔨 Creating new virtual environment in project root..."
+            echo "Creating new virtual environment in project root..."
             python3 -m venv .venv
           else
-            echo "✅ Existing .venv found. Updating..."
+            echo "Existing .venv found. Updating..."
           fi
           
           # 2. Activate
@@ -95,12 +93,17 @@ jobs:
           
           # 3. Compile/Install
           if [ -f "requirements.in" ]; then
-            echo "🔄 Compiling requirements.in..."
+            echo "Compiling requirements.in..."
             pip-compile requirements.in --output-file=requirements.txt
           fi
           
-          echo "📦 Installing dependencies..."
+          echo "Installing dependencies..."
           pip install -r requirements.txt
+          
+          Inject the local shared library
+          # The '-e' flag ensures changes are live instantly
+          echo "Installing local common-lib..."
+          pip install -e ../common-lib
           
           # 4. Add to Path (so verify.sh finds it)
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
@@ -122,7 +125,7 @@ jobs:
       # 7. VERIFICATION
       - name: Run Verification
         run: |
-          echo "🧪 Testing branch: ${{ github.ref_name }}"
+          echo "Testing branch: ${{ github.ref_name }}"
           cd "${{ env.DEPLOY_DIR }}"
           
           # Force the environment to use the local venv first
