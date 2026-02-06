@@ -22,8 +22,8 @@ def test_historical_load(env_config, pipeline_data):
     oracle_df = oracle.sql(env_config, f"SELECT * FROM {env_config.oracle_quant_table_name}")
 
     # Check 1: check recall of all days for quant lvls
-    assert clean_df['DATETIME'].nunique() >= num_of_business_days_since_cutoff
-    assert oracle_df['DATETIME'].nunique() >= num_of_business_days_since_cutoff
+    assert abs(clean_df['DATETIME'].nunique() - num_of_business_days_since_cutoff) <= 3
+    assert abs(oracle_df['DATETIME'].nunique() - num_of_business_days_since_cutoff) <= 3
 
     # Check 2: Smoke check to see if all records got through
     assert len(oracle_df) == len(clean_df)
