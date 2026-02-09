@@ -4,5 +4,6 @@ pytest
 SQLAlchemy
 requests
 beautifulsoup4
-cryptography
+# Pinning to <40 because newer versions require Rust/OpenSSL which fails on Synology
+cryptography<40.0.0
 tabulate
