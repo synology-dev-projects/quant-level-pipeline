@@ -97,8 +97,9 @@ jobs:
             pip-compile requirements.in --output-file=requirements.txt
           fi
           
-          echo "Installing dependencies..."
-          pip install -r requirements.txt
+          # --prefer-binary: Chooses older/compatible wheels over newer source code
+          # --force-reinstall: Ensures we don't use broken cached files
+          pip install --prefer-binary --force-reinstall -r requirements.txt
           
           #Inject the local shared library
           # The '-e' flag ensures changes are live instantly
