@@ -99,7 +99,7 @@ jobs:
           
           # --prefer-binary: Chooses older/compatible wheels over newer source code
           # --force-reinstall: Ensures we don't use broken cached files
-          pip install --prefer-binary --force-reinstall -r requirements.txt          
+          pip install --prefer-binary --force-reinstall --no-cache-dir -r requirements.txt            
           #Inject the local shared library
           # The '-e' flag ensures changes are live instantly
           echo "Installing local common-lib..."
