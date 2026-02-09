@@ -96,9 +96,29 @@ jobs:
             echo "Compiling requirements.in..."
             pip-compile requirements.in --output-file=requirements.txt
           fi
-          
-          # --prefer-binary: Chooses older/compatible wheels over newer source code
-          # --force-reinstall: Ensures we don't use broken cached files
+
+          # -----------------------------------------------------------
+          # 🔧 FIX: Force Synology-Compatible Cryptography (Step 1)
+          # We download the "Old Linux" version explicitly to bypass
+          # the Docker container's false reporting of system version.
+          # -----------------------------------------------------------
+          pip download \
+            --dest . \
+            --no-deps \
+            --platform manylinux_2_17_x86_64 \
+            --python-version 38 \
+            --implementation cp \
+            --abi abi3 \
+            --only-binary=:all: \
+            cryptography==46.0.4
+    
+          # 🔧 FIX: Install the specific file we just downloaded (Step 2)
+          echo "📦  Installing the compatibility wheel..."
+          pip install cryptography*.whl
+    
+          # Clean up the file so we don't clutter the build
+          rm cryptography*.whl         
+
           pip install --prefer-binary --force-reinstall --no-cache-dir -r requirements.txt            
           #Inject the local shared library
           # The '-e' flag ensures changes are live instantly
