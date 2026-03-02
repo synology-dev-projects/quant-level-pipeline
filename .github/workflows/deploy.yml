@@ -128,21 +128,6 @@ jobs:
           # 4. Add to Path (so verify.sh finds it)
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      # 6. SECRET INJECTION
-      - name: Create Runtime .env File
-        run: |
-          ENV_FILE="${{ env.DEPLOY_DIR }}/.env"
-          echo "Generating secure .env file at $ENV_FILE..."
-          
-          echo "ORACLE_USER=${{ secrets.ORACLE_USER }}" > "$ENV_FILE"
-          echo "ORACLE_PASS=${{ secrets.ORACLE_PASS }}" >> "$ENV_FILE"
-          echo "ORACLE_HOST_IP=${{ secrets.ORACLE_HOST_IP }}" >> "$ENV_FILE"
-          echo "ORACLE_SERVICE=${{ secrets.ORACLE_SERVICE }}" >> "$ENV_FILE"
-          echo "TE_COOKIE=${{ secrets.TE_COOKIE }}" >> "$ENV_FILE"
-          echo "NTFY_ENDPOINT"=${{ secrets.NTFY_ENDPOINT }} >> "$ENV_FILE"
-          
-          chmod 644 "$ENV_FILE"
-
       # 7. VERIFICATION
       - name: Run Verification
         run: |
