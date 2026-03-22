@@ -4,6 +4,5 @@ pytest
 SQLAlchemy
 requests
 beautifulsoup4
-# Pinning to ensure compatibility with Synology NAS (glibc 2.17)
-cryptography==46.0.4
+cryptography
 tabulate

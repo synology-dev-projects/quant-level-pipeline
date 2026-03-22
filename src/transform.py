@@ -137,6 +137,10 @@ def _define_quant_dataframe(parsed_data: []) -> pd.DataFrame:
     df['END_LVL_PRICE'] = df['END_LVL_PRICE'].astype(float)
     df['COMMENTS'] = df['COMMENTS'].str.replace('\xa0', ' ')
     #rest are string
+    df["COMMENTS"] = df["COMMENTS"].astype("string")
+    df["BUY_SELL_IND"] = df["BUY_SELL_IND"].astype("string")
+    df["WEB_LINK"] = df["WEB_LINK"].astype("string")
+
 
     return df
 
