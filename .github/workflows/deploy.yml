@@ -97,28 +97,6 @@ jobs:
             pip-compile requirements.in --output-file=requirements.txt
           fi
 
-          # -----------------------------------------------------------
-          # 🔧 FIX: Force Synology-Compatible Cryptography (Step 1)
-          # We download the "Old Linux" version explicitly to bypass
-          # the Docker container's false reporting of system version.
-          # -----------------------------------------------------------
-          pip download \
-            --dest . \
-            --no-deps \
-            --platform manylinux_2_17_x86_64 \
-            --python-version 38 \
-            --implementation cp \
-            --abi abi3 \
-            --only-binary=:all: \
-            cryptography==46.0.4
-    
-          # 🔧 FIX: Install the specific file we just downloaded (Step 2)
-          echo "📦  Installing the compatibility wheel..."
-          pip install cryptography*.whl
-    
-          # Clean up the file so we don't clutter the build
-          rm cryptography*.whl         
-
           pip install -r requirements.txt            
           #Inject the local shared library
           # The '-e' flag ensures changes are live instantly
@@ -128,7 +106,7 @@ jobs:
           # 4. Add to Path (so verify.sh finds it)
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      # 7. VERIFICATION
+      # 6. VERIFICATION
       - name: Run Verification
         run: |
           echo "Testing branch: ${{ github.ref_name }}"
@@ -140,7 +118,7 @@ jobs:
           chmod +x verify.sh
           ./verify.sh
 
-      # 8. MERGE LOGIC (Unchanged)
+      # 7. MERGE LOGIC (Unchanged)
       - name: Auto-Promote to Master
         if: github.ref_name == 'develop'
         run: |
