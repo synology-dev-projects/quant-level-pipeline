@@ -21,31 +21,38 @@ jobs:
           rm -rf ./.??*
 
       # 2. CHECKOUT
-          # --- SETUP ---
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Use your PAT here instead of the default token
-          token: ${{ secrets.MY_GITHUB_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # 3. SETUP VARIABLES (Calculate Path EARLY)
-      - name: Configure Deployment Paths
+      - name: Configure Deployment Paths and Common Config
         run: |
-          # Load Synology Root
+          # Ensure conf directory and syno_paths.env exist
           umask 002
+          mkdir -p ../../conf
+          if [ ! -f ../../conf/syno_paths.env ]; then
+            echo "SYNOLOGY_ROOT_PATH=/volume2/docker" > ../../conf/syno_paths.env
+          fi
+
           cat ../../conf/syno_paths.env >> $GITHUB_ENV
-          
+          source ../../conf/syno_paths.env
+
           # Calculate Variables
           BRANCH_NAME="${{ github.ref_name }}"
           REPO_NAME="${{ github.event.repository.name }}"
           
-          # Read SYNOLOGY_ROOT_PATH from the file we just loaded
-          source ../../conf/syno_paths.env
           TARGET_PATH="${SYNOLOGY_ROOT_PATH}/${BRANCH_NAME}/${REPO_NAME}"
+          COMMON_CONFIG_PATH="${SYNOLOGY_ROOT_PATH}/${BRANCH_NAME}/common_config"
+          mkdir -p "$COMMON_CONFIG_PATH"
           
           echo "📂 Target Path: $TARGET_PATH"
           echo "DEPLOY_DIR=$TARGET_PATH" >> $GITHUB_ENV
+          
+          echo "📂 Config Path: $COMMON_CONFIG_PATH"
+          echo "CONFIG_DIR=$COMMON_CONFIG_PATH" >> $GITHUB_ENV
 
       # 4. DEPLOY CODE (Copy files BEFORE installing deps)
       - name: Sync Code to Project Root
@@ -53,12 +60,9 @@ jobs:
           TARGET_PATH="${{ env.DEPLOY_DIR }}"
           mkdir -p "$TARGET_PATH"
 
-          # Wipe OLD source code to ensure deleted files are removed
-          # NOTE: We do NOT delete .venv, allowing it to persist!
+          # Wipe OLD source code (preserves .venv dot-folder)
           echo "🧹 Wiping old src/, tests/, and configs..."
           rm -rf "$TARGET_PATH"/*
-          rm -rf "$TARGET_PATH/.venv"
-
 
           # Copy NEW files to the persistent project root
           echo "🚀 Copying new files..."
@@ -69,47 +73,71 @@ jobs:
           sudo chown -R 1026:100 "$TARGET_PATH"
           chmod -R 775 "$TARGET_PATH"
           
-          
           # Copy requirement files if they exist
           [ -f requirements.txt ] && cp requirements.txt "$TARGET_PATH/"
           [ -f requirements.in ] && cp requirements.in "$TARGET_PATH/"
+
+      # 4.5 SETUP PYTHON
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
       # 5. MANAGE VENV (Run execution INSIDE Project Root)
       - name: Update Project Virtualenv
         run: |
           cd "${{ env.DEPLOY_DIR }}"
           
-          # 1. Create .venv only if it doesn't exist (Persists between runs!)
-          if [ ! -d ".venv" ]; then
-            echo "Creating new virtual environment in project root..."
-            python3.13 -m venv .venv
+          # 1. Create .venv if missing or if Python version < 3.12
+          if [ ! -d ".venv" ] || ! .venv/bin/python -c "import sys; exit(0 if sys.version_info >= (3, 12) else 1)" 2>/dev/null; then
+            echo "🔨 Creating new Python 3.13 virtual environment in project root..."
+            rm -rf .venv
+            python3 -m venv .venv
           else
-            echo "Existing .venv found. Updating..."
+            echo "✅ Existing .venv found. Updating..."
           fi
           
           # 2. Activate
           source .venv/bin/activate
-          pip install --upgrade pip pip-tools
+          pip install --upgrade pip
           
-          # 3. Compile/Install
-          if [ -f "requirements.in" ]; then
-            echo "Compiling requirements.in..."
+          # 3. Compile/Install (Only compile if requirements.txt does not exist)
+          if [ ! -f "requirements.txt" ] && [ -f "requirements.in" ]; then
+            echo "🔄 Compiling requirements.in..."
+            pip install --upgrade pip-tools
             pip-compile requirements.in --output-file=requirements.txt
           fi
 
+          echo "📦 Installing dependencies..."
           pip install -r requirements.txt            
-          #Inject the local shared library
-          # The '-e' flag ensures changes are live instantly
-          echo "Installing local common-lib..."
+          
+          # Inject local common-lib dependency
+          echo "📦 Installing local common-lib..."
           pip install -e ../common-lib
           
           # 4. Add to Path (so verify.sh finds it)
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      # 6. VERIFICATION
+      # 6. SECRET INJECTION
+      - name: Create Runtime .env File
+        run: |
+          ENV_FILE="${{ env.CONFIG_DIR }}/.env"
+          echo "Generating secure .env file at $ENV_FILE..."
+          
+          echo "SYNOLOGY_MAIN_IP=${{ secrets.SYNOLOGY_MAIN_IP }}" >> "$ENV_FILE"
+          echo "IBKR_GATEWAY_PORT=${{ secrets.IBKR_GATEWAY_PORT }}" >> "$ENV_FILE"
+          echo "ORACLE_USER=${{ secrets.ORACLE_USER }}" >> "$ENV_FILE"
+          echo "ORACLE_PASS=${{ secrets.ORACLE_PASS }}" >> "$ENV_FILE"
+          echo "ORACLE_SERVICE=${{ secrets.ORACLE_SERVICE }}" >> "$ENV_FILE"
+          echo "TE_COOKIE=${{ secrets.TE_COOKIE }}" >> "$ENV_FILE"
+          echo "NTFY_ENDPOINT=${{ secrets.NTFY_ENDPOINT }}" >> "$ENV_FILE"
+          
+          chmod 644 "$ENV_FILE"
+
+      # 7. VERIFICATION
       - name: Run Verification
         run: |
-          echo "Testing branch: ${{ github.ref_name }}"
+          echo "🧪 Testing branch: ${{ github.ref_name }}"
           cd "${{ env.DEPLOY_DIR }}"
           
           # Force the environment to use the local venv first
@@ -118,7 +146,7 @@ jobs:
           chmod +x verify.sh
           ./verify.sh
 
-      # 7. MERGE LOGIC (Unchanged)
+      # 8. MERGE LOGIC
       - name: Auto-Promote to Master
         if: github.ref_name == 'develop'
         run: |
