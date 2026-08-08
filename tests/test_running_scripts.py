@@ -9,22 +9,10 @@ import common_lib.connectors.nfty as nfty
 
 
 
-def is_oracle_available(env_config) -> bool:
-    """Helper to check if Oracle DB is reachable."""
-    try:
-        oracle.sql(env_config, "SELECT 1 FROM DUAL")
-        return True
-    except Exception:
-        return False
-
-
 def test_historical_load(env_config, pipeline_data):
     """
-    Verifies historical load pipeline. Skips gracefully if Oracle DB is unavailable.
+    Verifies historical load pipeline.
     """
-    if not is_oracle_available(env_config):
-        pytest.skip("Oracle DB is currently unavailable — skipping DB integration test.")
-
     # 1. Run entire pipeline
     raw_post_json = extract.run(env_config, cutoff_date=None)
     clean_df = transform.run(env_config, raw_post_json)
@@ -42,10 +30,8 @@ def test_historical_load(env_config, pipeline_data):
 
 def test_incremental_load(env_config, pipeline_data):
     """
-    Verifies that incremental load works correctly. Skips gracefully if Oracle DB is unavailable.
+    Verifies that incremental load works correctly.
     """
-    if not is_oracle_available(env_config):
-        pytest.skip("Oracle DB is currently unavailable — skipping DB integration test.")
 
     #delete all records of highest_date
     oracle.execute(env_config,
