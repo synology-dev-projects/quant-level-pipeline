@@ -1,7 +1,16 @@
 # tests/conftest.py
+import sys
+from pathlib import Path
 import pytest
-import extract, transform
 
+src_path = str(Path(__file__).resolve().parent.parent / "src")
+common_lib_path = str(Path(__file__).resolve().parent.parent.parent / "common-lib")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+if common_lib_path not in sys.path:
+    sys.path.insert(0, common_lib_path)
+
+import extract, transform
 import common_lib.config.main_config as config
 
 

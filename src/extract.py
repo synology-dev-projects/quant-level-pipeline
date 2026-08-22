@@ -141,13 +141,18 @@ def _prune_old_posts(posts_list: [], cutoff_date: datetime) -> []:
 
         if raw_date_str:
             item_date = parser.isoparse(raw_date_str)
-            if item_date >= cutoff_date + timedelta(days=1):
+            current_cutoff = cutoff_date
+            if current_cutoff.tzinfo is None and item_date.tzinfo is not None:
+                current_cutoff = current_cutoff.replace(tzinfo=item_date.tzinfo)
+            elif current_cutoff.tzinfo is not None and item_date.tzinfo is None:
+                item_date = item_date.replace(tzinfo=current_cutoff.tzinfo)
+
+            if item_date > current_cutoff:
                 keep_list.append(item)
             else:
                 dropped_count += 1
         else:
-            # If no date is present, usually safe to keep or log warning
-            # For now, we keep it to be safe
+            # If no date is present, usually safe to keep
             keep_list.append(item)
 
 
@@ -285,8 +290,11 @@ def _extract_file_link(posts):
         file_tag = soup.select_one("a.mighty-file, a.mighty-file-attachment-link")
 
         if file_tag:
-            post["file_link"] = file_tag.get("href")
-            post["quant_lvl_text"] = _get_file_content(post["file_link"])
+            file_url = file_tag.get("href")
+            post["file_link"] = file_url
+            content = _get_file_content(file_url)
+            if content:
+                post["quant_lvl_text"] = content
         else:
             post["file_link"] = None
 
