@@ -111,9 +111,17 @@ jobs:
           echo "📦 Installing dependencies..."
           pip install -r requirements.txt            
           
-          # Inject local common-lib dependency
-          echo "📦 Installing local common-lib..."
-          pip install -e ../common-lib
+          # Inject local common-lib dependency safely
+          if [ -d "../common-lib" ]; then
+            echo "📦 Installing local common-lib from ../common-lib..."
+            pip install -e ../common-lib
+          elif [ -d "/volume2/homes/rachardv/git-repos/master/common-lib" ]; then
+            echo "📦 Installing local common-lib from master..."
+            pip install -e /volume2/homes/rachardv/git-repos/master/common-lib
+          elif [ -d "/volume2/homes/rachardv/git-repos/develop/common-lib" ]; then
+            echo "📦 Installing local common-lib from develop..."
+            pip install -e /volume2/homes/rachardv/git-repos/develop/common-lib
+          fi
           
           # 4. Add to Path (so verify.sh finds it)
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
