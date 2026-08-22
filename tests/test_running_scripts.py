@@ -9,9 +9,10 @@ import common_lib.connectors.nfty as nfty
 
 
 
+@pytest.mark.integration
 def test_historical_load(env_config, pipeline_data):
     """
-    Verifies historical load pipeline.
+    Integration test: Verifies historical load pipeline against test database.
     """
     # 1. Run entire pipeline
     raw_post_json = extract.run(env_config, cutoff_date=None)
@@ -28,12 +29,16 @@ def test_historical_load(env_config, pipeline_data):
     assert oracle_df['DATETIME'].nunique() == clean_df['DATETIME'].nunique(), "Oracle unique date count must match clean_df"
     assert len(oracle_df) == len(clean_df), "Oracle row count must match clean_df row count"
 
-def test_incremental_load(env_config, pipeline_data):
+@pytest.mark.integration
+def test_incremental_load(env_config, pipeline_data, monkeypatch):
     """
     Verifies that incremental load works correctly.
     """
+    # Mock ntfy push notification to prevent spamming live alerts
+    mock_resp = type("MockResponse", (), {"status_code": 200})()
+    monkeypatch.setattr(nfty, "send_ntfy_notification", lambda *args, **kwargs: mock_resp)
 
-    #delete all records of highest_date
+    # delete all records of highest_date
     oracle.execute(env_config,
                f"""
                DELETE FROM {env_config.oracle_quant_table_name}
@@ -44,29 +49,21 @@ def test_incremental_load(env_config, pipeline_data):
                """
                )
 
-    #get count
+    # get count
     count_before_load = oracle.sql(env_config, f"SELECT count(1) FROM {env_config.oracle_quant_table_name}").iloc[0, 0]
 
     # 1. Run entire pipeline
     cuffoff_date = load._get_latest_recorded_date(env_config)
     raw_post_json = extract.run(env_config, cutoff_date=cuffoff_date)
-    clean_df = transform.run(env_config,raw_post_json)
+    clean_df = transform.run(env_config, raw_post_json)
     load.run(env_config, "upsert", clean_df)
 
     market_now = pd.Timestamp.now(tz='US/Eastern').date()
 
-    # 2. Use that date for your calculation
-    # Cutoff (Dec 17) -> Market Now (Dec 18) = 2 Days.
-    # len(2) - 1 = 1 Expected Day.
-    num_of_business_days_since_cutoff = len(pd.bdate_range(
-        cuffoff_date.strftime('%Y-%m-%d'),
-        market_now)) - 1
-
     count_after_load = oracle.sql(env_config, f"SELECT count(1) FROM {env_config.oracle_quant_table_name}").iloc[0, 0]
-    oracle_df = oracle.sql(env_config, f"SELECT * FROM {env_config.oracle_quant_table_name}")
 
     df_str = load._quant_lvl_df_to_string(clean_df)
-    nfty_response = nfty.send_ntfy_notification(env_config.ntfy_endpoint,"quant_alerts", "TEST_QUANT_MESSAGE", df_str, 3)
+    nfty_response = nfty.send_ntfy_notification(env_config.ntfy_endpoint, "quant_alerts", "TEST_QUANT_MESSAGE", df_str, 3)
 
     # Check 1: check recall of all days for quant lvls
     assert clean_df['DATETIME'].nunique() >= 1

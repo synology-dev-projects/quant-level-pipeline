@@ -40,7 +40,7 @@ def _parse_quant_levels_to_data(posts: []) -> pd.DataFrame:
 
     # Regex 2: Line Parser
     # Group 1: Start Price /Group 2: End Price /Group 3: Comment (Optional)
-    line_pattern = re.compile(r'^\s*(\d{4}(?:\.\d+)?)(?:\s*-\s*(\d{4}(?:\.\d+)?))?\s*(.*)')
+    line_pattern = re.compile(r'^\s*(\d{2,6}(?:\.\d+)?)(?:\s*-\s*(\d{2,6}(?:\.\d+)?))?\s*(.*)')
 
     all_posts_with_quant_lvl = [post for post in posts if post.get('quant_lvl_text')]
 
