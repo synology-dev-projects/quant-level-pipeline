@@ -1,3 +1,4 @@
+import pytest
 from datetime import datetime, timezone, date
 
 import pandas as pd
@@ -12,6 +13,7 @@ pd.set_option('display.max_colwidth', 100)  # Don't truncate long text in cells
 
 #--------------------------------------SPECIFIC CASES-------------------------------------------------------#
 
+@pytest.mark.integration
 def test_parse_quant_lvl_post(env_config, pipeline_data):
     """
     if input template found in post
@@ -60,6 +62,7 @@ def test_parse_quant_lvl_post(env_config, pipeline_data):
         raise e
 
 
+@pytest.mark.integration
 def test_parse_quant_lvl_post_2(env_config, pipeline_data):
     """
      if no input template found
@@ -97,6 +100,7 @@ def test_parse_quant_lvl_post_2(env_config, pipeline_data):
         raise e
 
 
+@pytest.mark.integration
 def test_parse_quant_lvl_post_3(env_config, pipeline_data):
     """
     This particular test shows how there may be overlapping levels.
@@ -152,6 +156,7 @@ def test_parse_quant_lvl_post_3(env_config, pipeline_data):
         raise e
 
 
+@pytest.mark.integration
 def test_parse_quant_lvl_file_5(env_config, pipeline_data):
     """
     Check to see if it parses the quant_file properly
@@ -188,6 +193,7 @@ def test_parse_quant_lvl_file_5(env_config, pipeline_data):
         raise e
 
 
+@pytest.mark.integration
 def test_parse_quant_lvl_file_2(env_config, pipeline_data):
     """
     Check to see if it parses the quant_file properly
@@ -224,6 +230,7 @@ def test_parse_quant_lvl_file_2(env_config, pipeline_data):
         raise e
 
 
+@pytest.mark.integration
 def test_parse_quant_lvl_post_without_buy_sell_zones(env_config, pipeline_data):
     """
     Check to see if it parses the page properly
