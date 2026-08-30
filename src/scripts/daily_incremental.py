@@ -31,7 +31,7 @@ def main():
             3
         )
 
-        # 3. Load df to oracle
+        # 3. Load df to postgres
         load.run(env_config, "upsert", clean_df)
         logging.info("Daily incremental quant levels loaded successfully.")
 

@@ -1,7 +1,7 @@
 import logging
 import pandas as pd
 from datetime import datetime, timezone
-import common_lib.connectors.oracle as oracle
+import common_lib.connectors.postgres as postgres
 from common_lib.config.main_config import MainConfig as Config
 import sys
 
@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 def run(config: Config, write_mode: str, df: pd.DataFrame) -> None:
-    table_name = config.oracle_quant_table_name
-    primary_keys = config.oracle_quant_pks
+    table_name = "quant_lvl_data_te"
+    primary_keys = ["datetime", "ticker", "start_lvl_price"]
 
     if df.empty:
         logging.error("DataFrame is empty. Skipping DB push.")
@@ -23,7 +23,7 @@ def run(config: Config, write_mode: str, df: pd.DataFrame) -> None:
     logging.info(f"Pushing {len(df)} rows to '{table_name}' with mode='{write_mode}'...")
 
     try:
-        oracle.insert_into_table(
+        postgres.insert_into_table(
             config=config,
             df=df,
             table_name=table_name,
@@ -34,7 +34,7 @@ def run(config: Config, write_mode: str, df: pd.DataFrame) -> None:
         logging.info("Push successful.")
 
     except Exception as e:
-        logging.error(f"Failed to push to Oracle: {e}")
+        logging.error(f"Failed to push to PostgreSQL: {e}")
         raise e
 
 
@@ -46,11 +46,11 @@ def _get_latest_recorded_date(config: Config) -> datetime:
     :param config:
     :return:
     """
-    query = f'SELECT MAX(DATETIME) FROM {config.oracle_quant_table_name}'
+    query = 'SELECT MAX(datetime) FROM quant_lvl_data_te'
 
     try:
         # 1. Run Query
-        df = oracle.sql(config, query)
+        df = postgres.sql(config, query)
 
         # 2. Check for Empty DataFrame (Rare for Aggregations)
         if df.empty:
@@ -59,14 +59,18 @@ def _get_latest_recorded_date(config: Config) -> datetime:
         # 3. Check for Null/NaT (Common: Table exists but has 0 rows)
         last_date = df.iloc[0, 0]
         if pd.isna(last_date):
-            raise CutoffDateNotFoundError(f"Table '{config.oracle_quant_table_name} is empty; no max date found.")
+            raise CutoffDateNotFoundError("Table 'quant_lvl_data_te' is empty; no max date found.")
 
         # 4. Success Case: Process the date
-        if isinstance(last_date, pd.Timestamp):
+        if isinstance(last_date, str):
+            last_date = pd.to_datetime(last_date).to_pydatetime()
+        elif isinstance(last_date, pd.Timestamp):
             last_date = last_date.to_pydatetime()
 
         if last_date.tzinfo is None:
             last_date = last_date.replace(tzinfo=timezone.utc)
+        else:
+            last_date = last_date.astimezone(timezone.utc)
 
         logger.info(f"Last checkpoint found: {last_date}")
         return last_date

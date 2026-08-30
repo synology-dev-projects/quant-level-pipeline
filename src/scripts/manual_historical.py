@@ -19,7 +19,7 @@ def main():
         # 2. Transform unstructured data to structured df
         clean_df = transform.run(env_config, raw_post_json)
 
-        # 3. Load df to oracle
+        # 3. Load df to postgres
         load.run(env_config, "overwrite", clean_df)
         logging.info("Historical quant levels loaded successfully.")
 
