@@ -1,7 +1,11 @@
-import extract, transform, load
 import logging
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("quant.pipeline.levels.daily_incremental")
 import sys
+import extract, transform, load
 import common_lib.config.main_config as config
 import common_lib.connectors.nfty as nfty
 
