@@ -149,7 +149,7 @@ jobs:
         run: |
           echo "📡 Verifying pipeline module integrity on Synology runner..."
           cd "${{ env.DEPLOY_DIR }}"
-          export PATH="$(pwd)/.venv/bin:$PATH"
+          source .venv/bin/activate
           python -c "import src.extract, src.transform, src.load; print('✅ quant-level-pipeline modules import cleanly!')"
 
       # 8. MERGE LOGIC
