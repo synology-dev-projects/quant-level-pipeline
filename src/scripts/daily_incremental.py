@@ -11,9 +11,9 @@ import common_lib.connectors.nfty as nfty
 
 
 def main():
-    env_config = config.load_config()
-
+    env_config = None
     try:
+        env_config = config.load_config()
         cutoff_date = load._get_latest_recorded_date(env_config)
 
         # 1. Fetch raw data from site (cutoff_date=None)
@@ -45,12 +45,11 @@ def main():
         error_msg = f"CRITICAL: daily_incremental.py failed with exception: {e}"
         logging.exception(error_msg)
         try:
-            nfty.send_ntfy_notification(
-                env_config.ntfy_endpoint,
-                "quant_alerts",
-                "🚨 PIPELINE FAILURE: Quant Levels",
-                error_msg,
-                5
+            from common_lib.connectors.alerts import dispatch_pipeline_failure_alert
+            dispatch_pipeline_failure_alert(
+                pipeline_name="Quant Levels",
+                error=error_msg,
+                config=env_config
             )
         except Exception as alert_err:
             logging.error(f"Failed to dispatch error notification: {alert_err}")
