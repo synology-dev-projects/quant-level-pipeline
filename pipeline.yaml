@@ -1,0 +1,11 @@
+name: quant_levels
+display_name: Quant Levels Support & Resistance
+description: Ingests daily key structural support & resistance levels from Mighty Networks
+version: 1.0.0
+category: levels
+upstream: []
+target_tables:
+  - quant_lvl_data_te
+timeout_sec: 300
+schedule: "15 9 * * 1-5"
+runner: common_lib.quant_levels.runner:run_daily_incremental
