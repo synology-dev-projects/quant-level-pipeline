@@ -7,5 +7,5 @@ upstream: []
 target_tables:
   - quant_lvl_data_te
 timeout_sec: 300
-schedule: "15 9 * * 1-5"
+schedule: "30 9 * * 1-5"
 runner: common_lib.quant_levels.runner:run_daily_incremental
